@@ -49,19 +49,22 @@ class GenerationViewModel(
         job = viewModelScope.launch {
             val project = projects.get(projectId)
             if (project == null) {
-                _state.update {
-                    it.copy(running = false, error = "Project missing.", retryable = false)
-                }
+                _state.update { it.copy(running = false, error = "Project missing.", retryable = false) }
                 return@launch
             }
             if (project.rawIdea.isBlank()) {
-                _state.update {
-                    it.copy(running = false, error = "This draft has no idea yet.", retryable = false)
-                }
+                _state.update { it.copy(running = false, error = "This draft has no idea yet.", retryable = false) }
                 return@launch
             }
+
+            // Continue is only allowed when the existing draft was generated from
+            // this exact idea. Legacy/unproven output is treated as stale.
+            val canContinue = continueWrite &&
+                project.generatedText.isNotBlank() &&
+                projects.generatedBelongsToIdea(project)
+
             val prefs = runCatching { settings.writing.first() }.getOrDefault(WritingPreferences())
-            val flow = if (continueWrite && project.generatedText.isNotBlank()) {
+            val flow = if (canContinue) {
                 ai.continueWriting(
                     ContinueRequest(project.rawIdea, project.format, project.generatedText, prefs)
                 )
