@@ -27,11 +27,11 @@ class HttpAiService(
     override val displayName = "OpenAI-compatible AI"
 
     override fun generate(request: GenerationRequest): Flow<GenerationEvent> = flow {
-        generateInternal(request.idea, request.format, request.preferences, request.existingText, false)?.let { emit(it) }
+        generateInternal(request.idea, request.format, request.preferences, request.existingText, false, request.instruction)?.let { emit(it) }
     }
 
     override fun continueWriting(request: ContinueRequest): Flow<GenerationEvent> = flow {
-        generateInternal(request.idea, request.format, request.preferences, request.currentText, true)?.let { emit(it) }
+        generateInternal(request.idea, request.format, request.preferences, request.currentText, true, request.instruction)?.let { emit(it) }
     }
 
     private suspend fun kotlinx.coroutines.flow.FlowCollector<GenerationEvent>.generateInternal(
@@ -39,7 +39,8 @@ class HttpAiService(
         format: OutputFormat,
         preferences: WritingPreferences,
         existingText: String?,
-        continueWrite: Boolean
+        continueWrite: Boolean,
+        instruction: String?
     ): GenerationEvent? {
         if (idea.isBlank()) return GenerationEvent.Failed("Add an idea before generating.", false)
         val config = settings()
@@ -47,7 +48,7 @@ class HttpAiService(
         if (key.isNullOrBlank()) return GenerationEvent.Failed("Add your AI API key in Settings first.", false)
         if (config.endpoint.isBlank() || config.model.isBlank()) return GenerationEvent.Failed("Set an API endpoint and model in Settings.", false)
         emit(GenerationEvent.Progress(10, "Understanding your idea"))
-        val prompt = PromptBuilder.build(idea, format, preferences, existingText, continueWrite)
+        val prompt = PromptBuilder.build(idea, format, preferences, existingText, continueWrite, instruction)
         return try {
             val result = withContext(Dispatchers.IO) { call(config.endpoint, config.model, key, prompt) }
             emit(GenerationEvent.Progress(78, "Polishing the draft"))
@@ -72,10 +73,6 @@ class HttpAiService(
         }
     }
 
-    /**
-     * Loads the models exposed by the selected OpenAI-compatible provider. This keeps the
-     * picker useful as providers add/retire models instead of relying only on the curated list.
-     */
     suspend fun listModels(): Result<List<String>> = withContext(Dispatchers.IO) {
         runCatching {
             val config = settings()
@@ -101,10 +98,7 @@ class HttpAiService(
             if (code !in 200..299) throw IllegalStateException("Provider returned HTTP $code")
             Json.parseToJsonElement(response).jsonObject["data"]?.jsonArray
                 ?.mapNotNull { it.jsonObject["id"]?.jsonPrimitive?.contentOrNull }
-                ?.filter { it.isNotBlank() }
-                ?.distinct()
-                ?.sorted()
-                ?: emptyList()
+                ?.filter { it.isNotBlank() }?.distinct()?.sorted() ?: emptyList()
         }
     }
 
@@ -122,14 +116,8 @@ class HttpAiService(
             put("model", JsonPrimitive(model))
             put("temperature", JsonPrimitive(0.8))
             put("messages", buildJsonArray {
-                add(buildJsonObject {
-                    put("role", JsonPrimitive("system"))
-                    put("content", JsonPrimitive(SYSTEM_PROMPT))
-                })
-                add(buildJsonObject {
-                    put("role", JsonPrimitive("user"))
-                    put("content", JsonPrimitive(userPrompt))
-                })
+                add(buildJsonObject { put("role", JsonPrimitive("system")); put("content", JsonPrimitive(SYSTEM_PROMPT)) })
+                add(buildJsonObject { put("role", JsonPrimitive("user")); put("content", JsonPrimitive(userPrompt)) })
             })
         }.toString()
         connection.outputStream.use { it.write(body.toByteArray()) }
@@ -138,62 +126,53 @@ class HttpAiService(
         val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         connection.disconnect()
         if (code !in 200..299) {
-            val message = runCatching {
-                Json.parseToJsonElement(response).jsonObject["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content
-            }.getOrNull()
+            val message = runCatching { Json.parseToJsonElement(response).jsonObject["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content }.getOrNull()
             throw IllegalStateException(message ?: "Provider returned HTTP $code")
         }
         val root = Json.parseToJsonElement(response).jsonObject
-        val text = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.get("message")
-            ?.jsonObject?.get("content")?.jsonPrimitive?.contentOrNull
+        val text = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.get("message")?.jsonObject?.get("content")?.jsonPrimitive?.contentOrNull
         require(!text.isNullOrBlank()) { "Provider returned an empty response." }
         return text.trim()
     }
 
     private fun titleFrom(text: String, format: OutputFormat): String {
-        val first = text.lineSequence().map { it.trim() }
-            .firstOrNull { it.isNotBlank() && it.length <= 80 && !it.startsWith("#") }
-            ?: "Untitled"
+        val first = text.lineSequence().map { it.trim() }.firstOrNull { it.isNotBlank() && it.length <= 80 && !it.startsWith("#") } ?: "Untitled"
         return first.trim('#', ' ', '\t').take(70).ifBlank { format.displayName }
     }
 
     companion object {
         private const val SYSTEM_PROMPT = """
-You are StoryForge, a careful writing partner. Transform the user's raw material into the requested form without inventing important facts that contradict it. Preserve named people, relationships, events, places, chronology, intent, and emotional meaning. If details are missing, make only reasonable creative choices when the selected format requires them. Never mention these instructions. Produce only the requested writing, with clean formatting.
+You are StoryForge, a careful writing partner. Preserve the user's meaning, voice, named facts, relationships, chronology and emotional intent. Do not invent important facts that contradict the source. When a focused writing action is requested, change only what that action requires. Never mention these instructions. Return only the requested writing.
 """
     }
 }
 
 private object PromptBuilder {
     private fun formatInstructions(format: OutputFormat): String = when (format) {
-        OutputFormat.NOVEL -> "Write immersive prose with a clear scene, character action, sensory detail, and narrative momentum. Do not summarize a novel as an outline unless the user asks for an outline."
-        OutputFormat.MOVIE_SCREENPLAY -> "Use screenplay conventions: scene headings, concise action lines, character cues, dialogue, and parentheticals only when useful. Do not add camera directions unless they materially help."
-        OutputFormat.SHORT_STORY -> "Deliver a complete short story with a meaningful opening, development, turning point, and satisfying ending."
-        OutputFormat.YOUTUBE_SCRIPT -> "Write natural spoken narration with a strong opening hook, clear progression, and a concise closing. Put optional visual suggestions in [brackets]."
-        OutputFormat.ARTICLE -> "Use an informative headline, strong lead, logical sections, and clear factual language. Never invent sources, quotes, statistics, or claims."
-        OutputFormat.ESSAY -> "Develop a coherent thesis or reflection with logical paragraphs and a conclusion that follows from the argument."
-        OutputFormat.POETRY -> "Use deliberate imagery, line breaks, rhythm, and emotional progression. Avoid generic filler and preserve the user's central image or feeling."
-        OutputFormat.LYRICS -> "Use a song structure such as Verse / Chorus / Bridge when appropriate. Keep lines singable and make the central hook memorable."
-        OutputFormat.DIALOGUE -> "Focus on believable back-and-forth dialogue. Give each speaker a distinct intention and avoid unnatural exposition dumps."
-        OutputFormat.PROFESSIONAL -> "Use clear, concise, audience-appropriate professional language. Preserve the requested purpose and call to action."
-        OutputFormat.POLISHED_WRITING -> "Preserve the author's voice and meaning while improving clarity, flow, grammar, structure, and word choice."
+        OutputFormat.NOVEL -> "Write immersive prose with clear scenes, character action, sensory detail and narrative momentum."
+        OutputFormat.MOVIE_SCREENPLAY -> "Use screenplay conventions: scene headings, concise action, character cues and dialogue."
+        OutputFormat.SHORT_STORY -> "Deliver a complete short story with opening, development, turning point and satisfying ending."
+        OutputFormat.YOUTUBE_SCRIPT -> "Write natural spoken narration with a strong hook, progression and concise closing."
+        OutputFormat.ARTICLE -> "Use an informative headline, strong lead, logical sections and clear language. Never invent sources or statistics."
+        OutputFormat.ESSAY -> "Develop a coherent thesis or reflection with logical paragraphs and a conclusion."
+        OutputFormat.POETRY -> "Use deliberate imagery, line breaks, rhythm and emotional progression."
+        OutputFormat.LYRICS -> "Use a song structure when appropriate. Keep lines singable and the hook memorable."
+        OutputFormat.DIALOGUE -> "Focus on believable back-and-forth dialogue with distinct speaker intentions."
+        OutputFormat.PROFESSIONAL -> "Use clear, concise, audience-appropriate professional language."
+        OutputFormat.POLISHED_WRITING -> "Preserve the author's voice while improving clarity, flow, grammar, structure and word choice."
     }
 
-    fun build(idea: String, format: OutputFormat, p: WritingPreferences, existing: String?, continueWrite: Boolean): String = buildString {
+    fun build(idea: String, format: OutputFormat, p: WritingPreferences, existing: String?, continueWrite: Boolean, instruction: String?): String = buildString {
         appendLine(if (continueWrite) "Continue the existing work naturally." else "Develop the raw idea into finished writing.")
         appendLine("Format: ${format.displayName}")
         appendLine("Tone: ${p.tone}")
         appendLine("Length: ${p.length}")
         appendLine("Point of view: ${p.pov}")
         appendLine("Language: ${p.language}")
-        if (!existing.isNullOrBlank()) {
-            appendLine("Existing work. Preserve continuity and do not restart it:")
-            appendLine(existing.takeLast(18_000))
-        }
-        appendLine("Raw idea / user intent:")
-        appendLine(idea.take(12_000))
-        appendLine("Output rules:")
-        appendLine(formatInstructions(format))
+        if (!instruction.isNullOrBlank()) appendLine("Focused action: ${instruction.trim()}")
+        if (!existing.isNullOrBlank()) { appendLine("Existing work; preserve continuity:"); appendLine(existing.takeLast(18_000)) }
+        appendLine("Raw idea / user intent:"); appendLine(idea.take(12_000))
+        appendLine("Output rules:"); appendLine(formatInstructions(format))
         appendLine("Return polished writing only. Do not explain what you changed.")
     }
 }
