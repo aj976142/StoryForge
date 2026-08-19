@@ -38,6 +38,7 @@ import com.storyforge.ai.ui.components.ErrorBanner
 import com.storyforge.ai.ui.components.LoadingBlock
 import com.storyforge.ai.ui.components.formatBadge
 import com.storyforge.ai.ui.components.formatModified
+import com.storyforge.ai.ui.components.previewLine
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,7 +55,10 @@ fun ProjectsScreen(viewModel: ProjectsViewModel, onOpen: (String) -> Unit, onCre
                 IconButton(onClick = { sortExpanded = true }) { Icon(Icons.Outlined.Sort, "Sort") }
                 DropdownMenu(expanded = sortExpanded, onDismissRequest = { sortExpanded = false }) {
                     ProjectSort.entries.forEach { sort ->
-                        DropdownMenuItem(text = { Text(when (sort) { ProjectSort.UPDATED -> "Recently updated"; ProjectSort.CREATED -> "Recently created"; ProjectSort.TITLE -> "Title A–Z" }) }, onClick = { viewModel.setSort(sort); sortExpanded = false })
+                        DropdownMenuItem(
+                            text = { Text(when (sort) { ProjectSort.UPDATED -> "Recently updated"; ProjectSort.CREATED -> "Recently created"; ProjectSort.TITLE -> "Title A–Z" }) },
+                            onClick = { viewModel.setSort(sort); sortExpanded = false }
+                        )
                     }
                 }
             }
@@ -82,7 +86,7 @@ fun ProjectsScreen(viewModel: ProjectsViewModel, onOpen: (String) -> Unit, onCre
                             Spacer(Modifier.height(4.dp))
                             Text("${formatBadge(project.format)} · ${formatModified(project.updatedAt)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(8.dp))
-                            Text(project.generatedText.ifBlank { project.rawIdea }.take(140).replace("\n", " "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(project.previewLine().ifBlank { "Empty draft" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(8.dp))
                             Row {
                                 TextButton(onClick = { onOpen(project.id) }) { Text("Open") }
@@ -101,7 +105,7 @@ fun ProjectsScreen(viewModel: ProjectsViewModel, onOpen: (String) -> Unit, onCre
         onDismissRequest = viewModel::cancelRename,
         title = { Text("Rename project") },
         text = { OutlinedTextField(value = renameText, onValueChange = { renameText = it }, singleLine = true, label = { Text("Title") }) },
-        confirmButton = { TextButton(onClick = { viewModel.rename(renamingId, renameText); }) { Text("Save") } },
+        confirmButton = { TextButton(onClick = { viewModel.rename(renamingId, renameText) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = viewModel::cancelRename) { Text("Cancel") } }
     )
 
