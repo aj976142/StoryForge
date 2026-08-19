@@ -20,11 +20,9 @@ class AppContainer(context: Context) {
     val projects = ProjectRepository(projectStore)
     val settings = SettingsRepository(settingsStore)
     val httpAiService = HttpAiService(
-        settings = { settings.ai.firstValue() },
+        settings = { settings.ai.first() },
         secretStore = secretStore
     )
     val demoAiService: AiService = MockAiService()
     val aiService: AiService = ConfiguredAiService(settings, httpAiService, demoAiService)
 }
-
-private suspend fun <T> kotlinx.coroutines.flow.Flow<T>.firstValue(): T = kotlinx.coroutines.flow.first()
