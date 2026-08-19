@@ -36,7 +36,8 @@ data class ThemePreference(
 
 @Serializable
 data class AiProviderSettings(
-    val provider: String = "mock",
-    val model: String = "storyforge-mock-v1",
-    val apiKeyConfigured: Boolean = false
+    val provider: String = "openai-compatible",
+    val model: String = "gpt-4o-mini",
+    val apiKeyConfigured: Boolean = false,
+    val endpoint: String = "https://api.openai.com/v1/chat/completions"
 )
