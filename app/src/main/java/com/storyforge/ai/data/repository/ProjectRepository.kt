@@ -5,6 +5,7 @@ import com.storyforge.ai.domain.model.InputMode
 import com.storyforge.ai.domain.model.OutputFormat
 import com.storyforge.ai.domain.model.Project
 import com.storyforge.ai.domain.model.ProjectStatus
+import com.storyforge.ai.util.GenerationProvenance
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.UUID
@@ -33,7 +34,11 @@ class ProjectRepository(private val store: ProjectStore) {
 
     suspend fun save(project: Project): Project = store.upsert(
         project.copy(
-            status = if (project.generatedText.isNotBlank()) ProjectStatus.SAVED else project.status,
+            status = if (project.generatedText.isNotBlank() && generatedBelongsToIdea(project)) {
+                ProjectStatus.SAVED
+            } else {
+                ProjectStatus.DRAFT
+            },
             title = project.title.ifBlank { "Untitled" }
         )
     )
@@ -42,7 +47,16 @@ class ProjectRepository(private val store: ProjectStore) {
 
     suspend fun updateIdea(id: String, idea: String): Project? {
         val current = store.getProject(id) ?: return null
-        return store.upsert(current.copy(rawIdea = idea))
+        val changed = GenerationProvenance.normalizeIdea(current.rawIdea) != GenerationProvenance.normalizeIdea(idea)
+        return store.upsert(
+            current.copy(
+                rawIdea = idea,
+                // Changing the idea invalidates any previous generated draft.
+                generatedText = if (changed) "" else current.generatedText,
+                generatedForIdeaHash = if (changed) "" else current.generatedForIdeaHash,
+                status = if (changed) ProjectStatus.DRAFT else current.status
+            )
+        )
     }
 
     suspend fun updateFormat(id: String, format: OutputFormat): Project? {
@@ -55,6 +69,7 @@ class ProjectRepository(private val store: ProjectStore) {
         return store.upsert(
             current.copy(
                 generatedText = text,
+                generatedForIdeaHash = GenerationProvenance.hashIdea(current.rawIdea),
                 title = title?.takeIf { it.isNotBlank() } ?: current.title,
                 status = ProjectStatus.GENERATED
             )
@@ -64,4 +79,9 @@ class ProjectRepository(private val store: ProjectStore) {
     suspend fun rename(id: String, title: String): Project? = store.rename(id, title)
 
     suspend fun delete(id: String) = store.delete(id)
+
+    fun generatedBelongsToIdea(project: Project): Boolean =
+        project.generatedText.isNotBlank() &&
+            project.generatedForIdeaHash.isNotBlank() &&
+            project.generatedForIdeaHash == GenerationProvenance.hashIdea(project.rawIdea)
 }
