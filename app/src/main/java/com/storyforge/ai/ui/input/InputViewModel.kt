@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.storyforge.ai.data.repository.ProjectRepository
+import com.storyforge.ai.data.repository.SettingsRepository
 import com.storyforge.ai.domain.model.InputMode
 import com.storyforge.ai.domain.model.OutputFormat
 import com.storyforge.ai.util.TextMetrics
@@ -38,6 +39,7 @@ data class InputUiState(
 class InputViewModel(
     application: Application,
     private val projects: ProjectRepository,
+    private val settings: SettingsRepository,
     private val projectId: String,
     initialMode: InputMode
 ) : AndroidViewModel(application) {
@@ -70,11 +72,16 @@ class InputViewModel(
 
     fun toggleVoice() {
         val current = _state.value
-        if (current.listening) voice.stop() else {
-            voice.clearError()
-            voice.start { spoken ->
-                val merged = listOf(_state.value.text.trim(), spoken.trim()).filter { it.isNotEmpty() }.joinToString(" ")
-                onTextChange(merged)
+        if (current.listening) {
+            voice.stop()
+        } else {
+            viewModelScope.launch {
+                voice.clearError()
+                val language = settings.writing.first().language
+                voice.start(language) { spoken ->
+                    val merged = listOf(_state.value.text.trim(), spoken.trim()).filter { it.isNotEmpty() }.joinToString(" ")
+                    onTextChange(merged)
+                }
             }
         }
     }
@@ -107,9 +114,9 @@ class InputViewModel(
     override fun onCleared() { voice.destroy(); super.onCleared() }
 
     companion object {
-        fun factory(application: Application, projects: ProjectRepository, projectId: String, mode: InputMode) = object : ViewModelProvider.Factory {
+        fun factory(application: Application, projects: ProjectRepository, settings: SettingsRepository, projectId: String, mode: InputMode) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T = InputViewModel(application, projects, projectId, mode) as T
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = InputViewModel(application, projects, settings, projectId, mode) as T
         }
     }
 }
