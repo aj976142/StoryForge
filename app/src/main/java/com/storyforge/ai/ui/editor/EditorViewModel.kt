@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.storyforge.ai.data.repository.ProjectRepository
 import com.storyforge.ai.domain.model.Project
 import com.storyforge.ai.domain.model.StoryBible
+import com.storyforge.ai.domain.model.StoryBibleEntry
+import com.storyforge.ai.util.StoryBrain
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 data class EditorUiState(
     val project: Project? = null,
@@ -45,7 +48,6 @@ class EditorViewModel(private val projectId: String, private val projects: Proje
 
     fun onTextChange(value: String) { _state.update { it.copy(text = value, saved = false, copied = false) }; scheduleAutosave() }
     fun onTitleChange(value: String) { _state.update { it.copy(title = value, saved = false) }; scheduleAutosave() }
-
     fun save(onDone: (() -> Unit)? = null) { viewModelScope.launch { if (persist(markSaved = true)) onDone?.invoke() } }
 
     fun updateStoryBible(bible: StoryBible) {
@@ -77,8 +79,17 @@ class EditorViewModel(private val projectId: String, private val projects: Proje
         val current = _state.value
         if (current.project == null) return false
         _state.update { it.copy(saving = true, error = null) }
-        return runCatching { projects.updateManuscript(projectId, current.text, current.title.trim()) ?: throw IllegalStateException("This project no longer exists.") }.fold(
-            onSuccess = { savedProject -> _state.update { it.copy(project = savedProject, saving = false, saved = markSaved, error = null) }; true },
+        return runCatching {
+            val saved = projects.updateManuscript(projectId, current.text, current.title.trim()) ?: throw IllegalStateException("This project no longer exists.")
+            val brain = StoryBrain.analyze(current.text)
+            val bible = saved.storyBible.copy(
+                characters = brain.characters.map { name -> StoryBibleEntry("character-${name.lowercase().replace(" ", "-")}", name) },
+                locations = brain.places.map { place -> StoryBibleEntry("location-${place.lowercase().replace(" ", "-")}", place) },
+                themes = brain.themes
+            )
+            projects.updateStoryBible(projectId, bible) ?: throw IllegalStateException("Story Bible could not be saved.")
+        }.fold(
+            onSuccess = { latest -> _state.update { it.copy(project = latest, saving = false, saved = markSaved, error = null) }; true },
             onFailure = { err -> _state.update { it.copy(saving = false, error = err.message ?: "Save failed.") }; false }
         )
     }
