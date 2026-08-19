@@ -5,6 +5,7 @@ import com.storyforge.ai.domain.model.InputMode
 import com.storyforge.ai.domain.model.OutputFormat
 import com.storyforge.ai.domain.model.Project
 import com.storyforge.ai.domain.model.ProjectStatus
+import com.storyforge.ai.domain.model.ProjectVersion
 import com.storyforge.ai.util.GenerationProvenance
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -47,7 +48,8 @@ class ProjectRepository(private val store: ProjectStore) {
             createdAt = current.createdAt,
             generatedForIdeaHash = if (project.generatedText.isBlank()) "" else current.generatedForIdeaHash,
             status = if (project.generatedText.isNotBlank() && current.generatedForIdeaHash.isNotBlank()) ProjectStatus.SAVED else ProjectStatus.DRAFT,
-            title = project.title.ifBlank { "Untitled" }
+            title = project.title.ifBlank { "Untitled" },
+            versions = appendVersion(current, project.generatedText, project.title, "Saved")
         )
         store.upsert(safe)
     }
@@ -56,15 +58,15 @@ class ProjectRepository(private val store: ProjectStore) {
         val current = store.getProject(id) ?: return@withLock null
         if (deletedIds.contains(id)) return@withLock null
         val manuscript = text.trim()
+        val nextVersions = appendVersion(current, manuscript, title, "Autosave")
         store.upsert(
             current.copy(
                 generatedText = manuscript,
-                // The hash identifies the manuscript's project context, whether
-                // the text was AI-generated or written directly by the user.
                 generatedForIdeaHash = if (manuscript.isBlank()) "" else GenerationProvenance.fingerprint(current.rawIdea, current.format),
                 title = title.ifBlank { current.title },
                 status = if (manuscript.isBlank()) ProjectStatus.DRAFT else ProjectStatus.SAVED,
-                revision = current.revision + 1
+                revision = current.revision + 1,
+                versions = nextVersions
             )
         )
     }
@@ -81,8 +83,9 @@ class ProjectRepository(private val store: ProjectStore) {
                 generatedText = if (changed) "" else current.generatedText,
                 generatedForIdeaHash = if (changed) "" else current.generatedForIdeaHash,
                 status = if (changed) ProjectStatus.DRAFT else current.status,
-                revision = current.revision + 1
-            )
+                revision = current.revision + 1,
+                versions = if (changed) current.versions + ProjectVersion(UUID.randomUUID().toString(), current.title, current.generatedText, label = "Before idea change") else current.versions
+            ).trimVersions()
         )
     }
 
@@ -96,7 +99,8 @@ class ProjectRepository(private val store: ProjectStore) {
                 generatedText = "",
                 generatedForIdeaHash = "",
                 status = ProjectStatus.DRAFT,
-                revision = current.revision + 1
+                revision = current.revision + 1,
+                versions = if (current.generatedText.isNotBlank()) (current.versions + ProjectVersion(UUID.randomUUID().toString(), current.title, current.generatedText, label = "Before format change")).takeLast(MAX_VERSIONS) else current.versions
             )
         )
     }
@@ -110,15 +114,24 @@ class ProjectRepository(private val store: ProjectStore) {
         val current = store.getProject(id) ?: return@withLock null
         if (deletedIds.contains(id) || current.revision != expectedRevision) return@withLock null
         val manuscript = text.trim()
+        val versions = appendVersion(current, manuscript, title ?: current.title, "AI generation")
         store.upsert(
             current.copy(
                 generatedText = manuscript,
                 generatedForIdeaHash = if (manuscript.isBlank()) "" else GenerationProvenance.fingerprint(current.rawIdea, current.format),
                 title = title?.takeIf { it.isNotBlank() } ?: current.title,
                 status = if (manuscript.isBlank()) ProjectStatus.DRAFT else ProjectStatus.GENERATED,
-                revision = current.revision + 1
+                revision = current.revision + 1,
+                versions = versions
             )
         )
+    }
+
+    suspend fun restoreVersion(id: String, versionId: String): Project? = mutationMutex.withLock {
+        val current = store.getProject(id) ?: return@withLock null
+        val version = current.versions.firstOrNull { it.id == versionId } ?: return@withLock null
+        val withBackup = appendVersion(current, current.generatedText, current.title, "Before restore")
+        store.upsert(current.copy(generatedText = version.text, title = version.title, generatedForIdeaHash = GenerationProvenance.fingerprint(current.rawIdea, current.format), status = if (version.text.isBlank()) ProjectStatus.DRAFT else ProjectStatus.SAVED, revision = current.revision + 1, versions = withBackup))
     }
 
     suspend fun rename(id: String, title: String): Project? = mutationMutex.withLock {
@@ -136,4 +149,15 @@ class ProjectRepository(private val store: ProjectStore) {
         project.generatedText.isNotBlank() &&
             project.generatedForIdeaHash.isNotBlank() &&
             project.generatedForIdeaHash == GenerationProvenance.fingerprint(project.rawIdea, project.format)
+
+    private fun appendVersion(project: Project, text: String, title: String, label: String): List<ProjectVersion> {
+        if (text.isBlank()) return project.versions
+        val last = project.versions.lastOrNull()
+        if (last?.text == text && last.title == title) return project.versions
+        return (project.versions + ProjectVersion(UUID.randomUUID().toString(), title.ifBlank { project.title }, text, label = label)).takeLast(MAX_VERSIONS)
+    }
+
+    private fun Project.trimVersions(): Project = copy(versions = versions.takeLast(MAX_VERSIONS))
+
+    companion object { private const val MAX_VERSIONS = 20 }
 }
