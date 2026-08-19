@@ -41,6 +41,16 @@ jobs:
       - name: Build debug and release variants
         run: ./gradlew --no-daemon assembleDebug assembleRelease
 
+      - name: Validate APK archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          for apk in app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/*.apk; do
+            echo "Checking $apk"
+            unzip -t "$apk" >/dev/null
+            test -s "$apk"
+          done
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
