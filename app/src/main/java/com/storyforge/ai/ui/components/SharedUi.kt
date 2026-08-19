@@ -5,12 +5,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -47,7 +48,12 @@ fun StoryForgeScaffold(
     onSettings: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    Column(Modifier.fillMaxSize()) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
         Box(Modifier.weight(1f)) { content() }
         NavigationBar(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -101,14 +107,14 @@ fun EmptyState(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Spacer(Modifier.height(16.dp))
+        androidx.compose.foundation.layout.Spacer(Modifier.height(16.dp))
         Text(
             title,
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(8.dp))
+        androidx.compose.foundation.layout.Spacer(Modifier.height(8.dp))
         Text(
             body,
             style = MaterialTheme.typography.bodyMedium,
@@ -116,7 +122,7 @@ fun EmptyState(
             textAlign = TextAlign.Center
         )
         if (actionLabel != null && onAction != null) {
-            Spacer(Modifier.height(16.dp))
+            androidx.compose.foundation.layout.Spacer(Modifier.height(16.dp))
             Button(onClick = onAction) { Text(actionLabel) }
         }
     }
@@ -148,7 +154,7 @@ fun LoadingBlock(label: String) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         CircularProgressIndicator()
-        Spacer(Modifier.height(12.dp))
+        androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp))
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground)
     }
 }
