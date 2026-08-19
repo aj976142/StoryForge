@@ -35,12 +35,8 @@ class EditorViewModel(private val projectId: String, private val projects: Proje
             if (project == null) {
                 _state.update { it.copy(loading = false, error = "Project could not be opened.") }
             } else {
-                // Never display generated content unless it is proven to belong to
-                // this project's current idea. This also protects older stored data.
-                val displayText = if (projects.generatedBelongsToIdea(project)) project.generatedText else project.rawIdea
-                _state.update {
-                    it.copy(project = project, text = displayText, title = project.title, loading = false)
-                }
+                val displayText = if (projects.generatedBelongsToContext(project)) project.generatedText else project.rawIdea
+                _state.update { it.copy(project = project, text = displayText, title = project.title, loading = false) }
             }
         }
     }
@@ -71,28 +67,16 @@ class EditorViewModel(private val projectId: String, private val projects: Proje
 
     private suspend fun persist(markSaved: Boolean) {
         val current = _state.value
-        val project = current.project ?: return
+        if (current.project == null) return
         _state.update { it.copy(saving = true, error = null) }
-
-        val generatedStillBelongs = projects.generatedBelongsToIdea(project)
-        val updated = if (generatedStillBelongs) {
-            // Editing an existing generated story keeps its provenance so Continue
-            // can safely extend this exact project.
-            project.copy(generatedText = current.text, title = current.title.ifBlank { project.title })
-        } else {
-            // This was legacy/stale output. Never silently turn it back into a
-            // generated draft or allow it to be continued later.
-            project.copy(
-                generatedText = current.text,
-                generatedForIdeaHash = "",
-                status = com.storyforge.ai.domain.model.ProjectStatus.DRAFT,
-                title = current.title.ifBlank { project.title }
-            )
+        runCatching {
+            projects.updateManuscript(projectId, current.text, current.title.trim())
+                ?: throw IllegalStateException("This project no longer exists.")
+        }.onSuccess { savedProject ->
+            _state.update { it.copy(project = savedProject, saving = false, saved = markSaved) }
+        }.onFailure { err ->
+            _state.update { it.copy(saving = false, error = err.message ?: "Save failed.") }
         }
-
-        runCatching { projects.save(updated) }
-            .onSuccess { savedProject -> _state.update { it.copy(project = savedProject, saving = false, saved = markSaved) } }
-            .onFailure { err -> _state.update { it.copy(saving = false, error = err.message ?: "Save failed.") } }
     }
 
     companion object {
