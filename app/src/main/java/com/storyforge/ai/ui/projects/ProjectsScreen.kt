@@ -1,5 +1,6 @@
 package com.storyforge.ai.ui.projects
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -80,7 +82,7 @@ fun ProjectsScreen(viewModel: ProjectsViewModel, onOpen: (String) -> Unit, onCre
                             Spacer(Modifier.height(8.dp))
                             Text(project.previewLine().ifBlank { "Empty draft" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(8.dp))
-                            Row {
+                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                 TextButton(onClick = { onOpen(project.id) }) { Text("Open") }
                                 TextButton(onClick = { viewModel.duplicate(project.id) }) { Icon(Icons.Outlined.ContentCopy, null); Text("Duplicate") }
                                 TextButton(onClick = { renameText = project.title; viewModel.beginRename(project.id) }) { Text("Rename") }
