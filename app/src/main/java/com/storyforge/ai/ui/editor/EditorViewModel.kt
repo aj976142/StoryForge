@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.storyforge.ai.data.repository.ProjectRepository
 import com.storyforge.ai.domain.model.Project
-import com.storyforge.ai.domain.model.ProjectVersion
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
