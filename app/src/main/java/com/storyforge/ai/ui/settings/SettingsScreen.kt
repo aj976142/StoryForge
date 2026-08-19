@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
@@ -44,6 +45,8 @@ import com.storyforge.ai.data.ai.AiProviderCatalog
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val liveModels by viewModel.models.collectAsStateWithLifecycle()
+    val loadingModels by viewModel.isLoadingModels.collectAsStateWithLifecycle()
     var apiKey by remember { mutableStateOf("") }
     var showKey by remember { mutableStateOf(false) }
     var providerExpanded by remember { mutableStateOf(false) }
@@ -52,7 +55,8 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
     val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
     val providerOptions = AiProviderCatalog.presets
     val selectedPreset = AiProviderCatalog.preset(state.ai.provider)
-    val modelOptions = AiProviderCatalog.options(state.ai.provider, state.ai.model)
+    val curatedModels = AiProviderCatalog.options(state.ai.provider, state.ai.model)
+    val modelOptions = (liveModels + curatedModels).distinct().take(200)
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(title = { Text("Settings", color = textPrimary) })
@@ -112,7 +116,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                             value = state.ai.model,
                             onValueChange = viewModel::setModel,
                             label = { Text("AI model") },
-                            supportingText = { Text("Choose a preset or type any model ID supported by the provider") },
+                            supportingText = { Text("Preset models are included; Refresh loads models currently exposed by your provider") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(modelExpanded) },
                             modifier = Modifier.fillMaxWidth().menuAnchor(),
                             singleLine = true
@@ -131,6 +135,17 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                                 )
                             }
                         }
+                    }
+
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = viewModel::refreshModels,
+                        enabled = !loadingModels,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = null)
+                        Spacer(Modifier.height(0.dp))
+                        Text(if (loadingModels) "Loading available models…" else "Refresh available models")
                     }
 
                     Spacer(Modifier.height(8.dp))
