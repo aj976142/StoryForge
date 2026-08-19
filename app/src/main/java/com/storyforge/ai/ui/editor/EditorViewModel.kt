@@ -46,7 +46,11 @@ class EditorViewModel(private val projectId: String, private val projects: Proje
     fun onTextChange(value: String) { _state.update { it.copy(text = value, saved = false, copied = false) }; scheduleAutosave() }
     fun onTitleChange(value: String) { _state.update { it.copy(title = value, saved = false) }; scheduleAutosave() }
 
-    fun save(onDone: (() -> Unit)? = null) { viewModelScope.launch { persist(markSaved = true); onDone?.invoke() } }
+    fun save(onDone: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            if (persist(markSaved = true)) onDone?.invoke()
+        }
+    }
 
     fun restore(versionId: String) {
         viewModelScope.launch {
@@ -67,13 +71,23 @@ class EditorViewModel(private val projectId: String, private val projects: Proje
         autosaveJob = viewModelScope.launch { delay(600); persist(markSaved = false) }
     }
 
-    private suspend fun persist(markSaved: Boolean) {
+    private suspend fun persist(markSaved: Boolean): Boolean {
         val current = _state.value
-        if (current.project == null) return
+        if (current.project == null) return false
         _state.update { it.copy(saving = true, error = null) }
-        runCatching { projects.updateManuscript(projectId, current.text, current.title.trim()) ?: throw IllegalStateException("This project no longer exists.") }
-            .onSuccess { savedProject -> _state.update { it.copy(project = savedProject, saving = false, saved = markSaved) } }
-            .onFailure { err -> _state.update { it.copy(saving = false, error = err.message ?: "Save failed.") } }
+        return runCatching {
+            projects.updateManuscript(projectId, current.text, current.title.trim())
+                ?: throw IllegalStateException("This project no longer exists.")
+        }.fold(
+            onSuccess = { savedProject ->
+                _state.update { it.copy(project = savedProject, saving = false, saved = markSaved, error = null) }
+                true
+            },
+            onFailure = { err ->
+                _state.update { it.copy(saving = false, error = err.message ?: "Save failed.") }
+                false
+            }
+        )
     }
 
     companion object {
