@@ -55,12 +55,15 @@ class ProjectRepository(private val store: ProjectStore) {
     suspend fun updateManuscript(id: String, text: String, title: String): Project? = mutationMutex.withLock {
         val current = store.getProject(id) ?: return@withLock null
         if (deletedIds.contains(id)) return@withLock null
+        val manuscript = text.trim()
         store.upsert(
             current.copy(
-                generatedText = text,
-                generatedForIdeaHash = if (text.isBlank()) "" else current.generatedForIdeaHash,
+                generatedText = manuscript,
+                // The hash identifies the manuscript's project context, whether
+                // the text was AI-generated or written directly by the user.
+                generatedForIdeaHash = if (manuscript.isBlank()) "" else GenerationProvenance.fingerprint(current.rawIdea, current.format),
                 title = title.ifBlank { current.title },
-                status = if (text.isBlank()) ProjectStatus.DRAFT else if (current.generatedForIdeaHash.isNotBlank()) ProjectStatus.SAVED else ProjectStatus.DRAFT,
+                status = if (manuscript.isBlank()) ProjectStatus.DRAFT else ProjectStatus.SAVED,
                 revision = current.revision + 1
             )
         )
@@ -106,12 +109,13 @@ class ProjectRepository(private val store: ProjectStore) {
     ): Project? = mutationMutex.withLock {
         val current = store.getProject(id) ?: return@withLock null
         if (deletedIds.contains(id) || current.revision != expectedRevision) return@withLock null
+        val manuscript = text.trim()
         store.upsert(
             current.copy(
-                generatedText = text,
-                generatedForIdeaHash = GenerationProvenance.fingerprint(current.rawIdea, current.format),
+                generatedText = manuscript,
+                generatedForIdeaHash = if (manuscript.isBlank()) "" else GenerationProvenance.fingerprint(current.rawIdea, current.format),
                 title = title?.takeIf { it.isNotBlank() } ?: current.title,
-                status = ProjectStatus.GENERATED,
+                status = if (manuscript.isBlank()) ProjectStatus.DRAFT else ProjectStatus.GENERATED,
                 revision = current.revision + 1
             )
         )
