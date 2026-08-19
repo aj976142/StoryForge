@@ -72,6 +72,42 @@ class HttpAiService(
         }
     }
 
+    /**
+     * Loads the models exposed by the selected OpenAI-compatible provider. This keeps the
+     * picker useful as providers add/retire models instead of relying only on the curated list.
+     */
+    suspend fun listModels(): Result<List<String>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val config = settings()
+            val key = secretStore.getApiKey().orEmpty()
+            require(key.isNotBlank()) { "Add an API key first." }
+            val endpoint = config.endpoint.trim().removeSuffix("/")
+            val modelsUrl = when {
+                endpoint.endsWith("/chat/completions") -> endpoint.removeSuffix("/chat/completions") + "/models"
+                endpoint.endsWith("/models") -> endpoint
+                else -> throw IllegalArgumentException("This provider does not expose a standard /models endpoint.")
+            }
+            val connection = (URL(modelsUrl).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                setRequestProperty("Authorization", "Bearer $key")
+                setRequestProperty("Accept", "application/json")
+            }
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            connection.disconnect()
+            if (code !in 200..299) throw IllegalStateException("Provider returned HTTP $code")
+            Json.parseToJsonElement(response).jsonObject["data"]?.jsonArray
+                ?.mapNotNull { it.jsonObject["id"]?.jsonPrimitive?.contentOrNull }
+                ?.filter { it.isNotBlank() }
+                ?.distinct()
+                ?.sorted()
+                ?: emptyList()
+        }
+    }
+
     private fun call(endpoint: String, model: String, apiKey: String, userPrompt: String): String {
         val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
