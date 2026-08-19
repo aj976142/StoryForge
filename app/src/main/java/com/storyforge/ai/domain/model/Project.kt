@@ -8,13 +8,16 @@ data class Project(
     val title: String,
     val rawIdea: String = "",
     val generatedText: String = "",
-    // SHA-256 of rawIdea used to create generatedText. Empty means legacy/untrusted output.
+    // Fingerprint of the idea + format + writing preferences used by the current manuscript.
+    // Empty means legacy/untrusted output.
     val generatedForIdeaHash: String = "",
     val format: OutputFormat = OutputFormat.SHORT_STORY,
     val inputMode: InputMode = InputMode.TEXT,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val status: ProjectStatus = ProjectStatus.DRAFT
+    val status: ProjectStatus = ProjectStatus.DRAFT,
+    // Monotonic in-app revision used to prevent stale generation results from overwriting edits.
+    val revision: Long = 0L
 )
 
 @Serializable
