@@ -16,6 +16,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -44,16 +47,23 @@ fun StoryForgeScaffold(
     onHome: () -> Unit,
     onProjects: () -> Unit,
     onSettings: () -> Unit,
+    showBottomNavigation: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    Column(
-        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
-    ) {
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Box(Modifier.weight(1f)) { content() }
-        NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 4.dp) {
-            NavigationBarItem(selected = selected == "home", onClick = onHome, icon = { Icon(Icons.Outlined.Home, "Home") }, label = { Text("Home") })
-            NavigationBarItem(selected = selected == "projects", onClick = onProjects, icon = { Icon(Icons.Outlined.FolderOpen, "Projects") }, label = { Text("Projects") })
-            NavigationBarItem(selected = selected == "settings", onClick = onSettings, icon = { Icon(Icons.Outlined.Settings, "Settings") }, label = { Text("Settings") })
+        if (showBottomNavigation) {
+            NavigationBar(
+                modifier = Modifier.navigationBarsPadding(),
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp
+            ) {
+                NavigationBarItem(selected = selected == "home", onClick = onHome, icon = { Icon(Icons.Outlined.Home, "Home") }, label = { Text("Home") })
+                NavigationBarItem(selected = selected == "projects", onClick = onProjects, icon = { Icon(Icons.Outlined.FolderOpen, "Projects") }, label = { Text("Projects") })
+                NavigationBarItem(selected = selected == "settings", onClick = onSettings, icon = { Icon(Icons.Outlined.Settings, "Settings") }, label = { Text("Settings") })
+            }
+        } else {
+            Box(Modifier.navigationBarsPadding().height(0.dp))
         }
     }
 }
