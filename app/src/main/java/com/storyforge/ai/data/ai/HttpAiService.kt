@@ -112,9 +112,10 @@ class HttpAiService(
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "application/json")
         }
+        // Keep the request body conservative. Some OpenAI-compatible providers reject
+        // optional sampling fields such as temperature; the model's server defaults are safe.
         val body = buildJsonObject {
             put("model", JsonPrimitive(model))
-            put("temperature", JsonPrimitive(0.8))
             put("messages", buildJsonArray {
                 add(buildJsonObject { put("role", JsonPrimitive("system")); put("content", JsonPrimitive(SYSTEM_PROMPT)) })
                 add(buildJsonObject { put("role", JsonPrimitive("user")); put("content", JsonPrimitive(userPrompt)) })
