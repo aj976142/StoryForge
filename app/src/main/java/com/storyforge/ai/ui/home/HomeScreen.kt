@@ -47,12 +47,14 @@ fun HomeScreen(
     onOpenProject: (String) -> Unit
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val textPrimary = MaterialTheme.colorScheme.onBackground
+    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
 
     Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp)
+            .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -64,22 +66,22 @@ fun HomeScreen(
             ) {
                 Icon(
                     Icons.Outlined.LocalFireDepartment,
-                    contentDescription = null,
+                    contentDescription = "StoryForge",
                     tint = MaterialTheme.colorScheme.onPrimary
                 )
             }
             Spacer(Modifier.size(12.dp))
             Column {
-                Text("StoryForge AI", style = MaterialTheme.typography.headlineMedium)
+                Text("StoryForge", style = MaterialTheme.typography.headlineMedium, color = textPrimary)
                 Text(
-                    "Speak a spark. Leave with a story.",
+                    "Turn rough thoughts into finished writing.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = textSecondary
                 )
             }
         }
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
 
         Button(
             onClick = { viewModel.startProject(InputMode.TEXT) { onOpenInput(it, "TEXT") } },
@@ -98,7 +100,7 @@ fun HomeScreen(
                 enabled = !state.creating,
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Outlined.KeyboardVoice, contentDescription = null)
+                Icon(Icons.Outlined.KeyboardVoice, contentDescription = "Voice input")
                 Spacer(Modifier.size(8.dp))
                 Text("Voice Input")
             }
@@ -107,7 +109,7 @@ fun HomeScreen(
                 enabled = !state.creating,
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Outlined.EditNote, contentDescription = null)
+                Icon(Icons.Outlined.EditNote, contentDescription = "Type idea")
                 Spacer(Modifier.size(8.dp))
                 Text("Type Idea")
             }
@@ -119,14 +121,14 @@ fun HomeScreen(
         }
 
         Spacer(Modifier.height(28.dp))
-        Text("Recent Projects", style = MaterialTheme.typography.titleLarge)
+        Text("Recent Projects", style = MaterialTheme.typography.titleLarge, color = textPrimary)
         Spacer(Modifier.height(12.dp))
 
         when {
-            state.loading -> Text("Loading your forge…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            state.loading -> Text("Loading your forge…", color = textSecondary)
             state.recent.isEmpty() -> EmptyState(
                 title = "No stories yet",
-                body = "Start with a messy thought. We'll shape it into a novel, script, or clean prose.",
+                body = "Start with a messy thought. We'll shape it into a novel, script, article, or polished prose.",
                 actionLabel = "New Project",
                 onAction = { viewModel.startProject(InputMode.TEXT) { onOpenInput(it, "TEXT") } }
             )
@@ -139,17 +141,17 @@ fun HomeScreen(
                             .clickable { onOpenProject(project.id) }
                     ) {
                         Column(Modifier.padding(16.dp)) {
-                            Text(project.title, style = MaterialTheme.typography.titleMedium)
+                            Text(project.title, style = MaterialTheme.typography.titleMedium, color = textPrimary)
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 project.previewLine().ifBlank { "Empty draft" },
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = textSecondary
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 "${formatBadge(project.format)} · ${formatModified(project.updatedAt)}",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
