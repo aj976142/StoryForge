@@ -8,6 +8,8 @@ data class Project(
     val title: String,
     val rawIdea: String = "",
     val generatedText: String = "",
+    // SHA-256 of rawIdea used to create generatedText. Empty means legacy/untrusted output.
+    val generatedForIdeaHash: String = "",
     val format: OutputFormat = OutputFormat.SHORT_STORY,
     val inputMode: InputMode = InputMode.TEXT,
     val createdAt: Long = System.currentTimeMillis(),
