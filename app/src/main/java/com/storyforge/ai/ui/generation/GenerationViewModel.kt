@@ -39,9 +39,7 @@ class GenerationViewModel(
     val state: StateFlow<GenerationUiState> = _state.asStateFlow()
     private var job: Job? = null
 
-    init {
-        start()
-    }
+    init { start() }
 
     fun start() {
         job?.cancel()
@@ -57,20 +55,20 @@ class GenerationViewModel(
                 return@launch
             }
 
-            // Continue is only allowed when the existing draft was generated from
-            // this exact idea. Legacy/unproven output is treated as stale.
+            // Capture the exact project revision used to start this generation.
+            // If the user edits, changes format, deletes, or otherwise saves the
+            // project while generation is running, the result is rejected instead
+            // of being attached to the newer state.
+            val expectedRevision = project.revision
             val canContinue = continueWrite &&
-                project.generatedText.isNotBlank() &&
-                projects.generatedBelongsToIdea(project)
-
+                projects.generatedBelongsToContext(project)
             val prefs = runCatching { settings.writing.first() }.getOrDefault(WritingPreferences())
             val flow = if (canContinue) {
-                ai.continueWriting(
-                    ContinueRequest(project.rawIdea, project.format, project.generatedText, prefs)
-                )
+                ai.continueWriting(ContinueRequest(project.rawIdea, project.format, project.generatedText, prefs))
             } else {
                 ai.generate(GenerationRequest(project.rawIdea, project.format, prefs))
             }
+
             try {
                 flow.collect { event ->
                     when (event) {
@@ -79,9 +77,24 @@ class GenerationViewModel(
                         }
                         is GenerationEvent.Chunk -> Unit
                         is GenerationEvent.Completed -> {
-                            projects.updateGenerated(projectId, event.fullText, event.suggestedTitle)
-                            _state.update {
-                                it.copy(percent = 100, stage = "Ready", running = false, doneId = projectId)
+                            val saved = projects.updateGenerated(
+                                id = projectId,
+                                expectedRevision = expectedRevision,
+                                text = event.fullText,
+                                title = event.suggestedTitle
+                            )
+                            if (saved == null) {
+                                _state.update {
+                                    it.copy(
+                                        running = false,
+                                        error = "This project changed while StoryForge was writing. Nothing was overwritten; generate again from the latest draft.",
+                                        retryable = true
+                                    )
+                                }
+                            } else {
+                                _state.update {
+                                    it.copy(percent = 100, stage = "Ready", running = false, doneId = projectId)
+                                }
                             }
                         }
                         is GenerationEvent.Failed -> _state.update {
@@ -92,9 +105,7 @@ class GenerationViewModel(
             } catch (_: kotlinx.coroutines.CancellationException) {
                 _state.update { it.copy(running = false, stage = "Stopped", error = "Generation stopped.") }
             } catch (error: Exception) {
-                _state.update {
-                    it.copy(running = false, error = error.message ?: "Something went wrong.", retryable = true)
-                }
+                _state.update { it.copy(running = false, error = error.message ?: "Something went wrong.", retryable = true) }
             }
         }
     }
