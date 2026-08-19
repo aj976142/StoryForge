@@ -9,6 +9,7 @@ import com.storyforge.ai.data.local.SecretStore
 import com.storyforge.ai.data.repository.SettingsRepository
 import com.storyforge.ai.domain.model.AiProviderSettings
 import com.storyforge.ai.domain.model.WritingPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -29,11 +30,17 @@ class SettingsViewModel(
     private val secretStore: SecretStore,
     private val testAi: HttpAiService
 ) : ViewModel() {
-    private val busy = kotlinx.coroutines.flow.MutableStateFlow(false)
-    private val message = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    private val busy = MutableStateFlow(false)
+    private val message = MutableStateFlow<String?>(null)
+    private val liveModels = MutableStateFlow<List<String>>(emptyList())
+    private val loadingModels = MutableStateFlow(false)
+
     val state: StateFlow<SettingsUiState> = combine(settings.theme, settings.writing, settings.ai, busy, message) { theme, writing, ai, testing, msg ->
         SettingsUiState(theme.mode, writing, ai, testing, msg)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
+
+    val models: StateFlow<List<String>> = liveModels
+    val isLoadingModels: StateFlow<Boolean> = loadingModels
 
     init {
         viewModelScope.launch {
@@ -56,11 +63,22 @@ class SettingsViewModel(
             model = preset.models.firstOrNull() ?: current.model
         )
         settings.setAi(next.copy(apiKeyConfigured = secretStore.getApiKey()?.isNotBlank() == true))
+        liveModels.value = emptyList()
         message.value = null
     }
 
     fun setModel(model: String) = viewModelScope.launch { settings.setAi(state.value.ai.copy(model = model.trim())) }
     fun setEndpoint(endpoint: String) = viewModelScope.launch { settings.setAi(state.value.ai.copy(endpoint = endpoint.trim())) }
+
+    fun refreshModels() {
+        viewModelScope.launch {
+            loadingModels.value = true
+            val result = testAi.listModels()
+            liveModels.value = result.getOrDefault(emptyList())
+            message.value = result.exceptionOrNull()?.message ?: if (liveModels.value.isNotEmpty()) "Loaded ${liveModels.value.size} models from the provider" else null
+            loadingModels.value = false
+        }
+    }
 
     fun saveApiKey(key: String) = viewModelScope.launch {
         secretStore.saveApiKey(key.trim())
