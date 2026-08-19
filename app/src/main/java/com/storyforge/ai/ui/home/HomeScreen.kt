@@ -47,172 +47,81 @@ import com.storyforge.ai.ui.components.previewLine
 fun HomeScreen(
     viewModel: HomeViewModel,
     onOpenInput: (projectId: String, mode: String) -> Unit,
-    onOpenProject: (String) -> Unit
+    onOpenProject: (String) -> Unit,
+    onOpenProjects: () -> Unit
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val textPrimary = MaterialTheme.colorScheme.onBackground
     val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
 
     Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-            .padding(top = 8.dp, bottom = 12.dp)
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 12.dp)
     ) {
-        // Stable top app header. Keeping it outside the hero card prevents the title
-        // from being clipped on devices with different status-bar heights.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Outlined.LocalFireDepartment,
-                    contentDescription = "StoryForge",
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
+        Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.LocalFireDepartment, "StoryForge", tint = MaterialTheme.colorScheme.onPrimary)
             }
             Spacer(Modifier.size(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    "StoryForge",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = textPrimary
-                )
-                Text(
-                    "Your writing space",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = textSecondary
-                )
+                Text("StoryForge", style = MaterialTheme.typography.titleLarge, color = textPrimary)
+                Text("Your writing space", style = MaterialTheme.typography.labelMedium, color = textSecondary)
             }
-            IconButton(onClick = { /* Search will be wired in a later pass. */ }) {
-                Icon(
-                    Icons.Outlined.Search,
-                    contentDescription = "Search projects",
-                    tint = textSecondary
-                )
+            IconButton(onClick = onOpenProjects) {
+                Icon(Icons.Outlined.Search, "Search projects", tint = textSecondary)
             }
         }
 
         Spacer(Modifier.height(12.dp))
-
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(18.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp)) {
-                Text(
-                    "Turn an idea into something real.",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = textPrimary
-                )
+                Text("Turn an idea into something real.", style = MaterialTheme.typography.titleMedium, color = textPrimary)
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    "Start with a rough thought, voice note, or a blank page.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = textSecondary
-                )
+                Text("Start with a rough thought, voice note, or a blank page.", style = MaterialTheme.typography.bodyMedium, color = textSecondary)
             }
         }
 
         Spacer(Modifier.height(14.dp))
-
         Button(
             onClick = { viewModel.startProject(InputMode.TEXT) { onOpenInput(it, "TEXT") } },
             enabled = !state.creating,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(54.dp),
+            modifier = Modifier.fillMaxWidth().height(54.dp),
             shape = RoundedCornerShape(14.dp)
-        ) {
-            Text(if (state.creating) "Opening…" else "New Project")
-        }
+        ) { Text(if (state.creating) "Opening…" else "New Project") }
 
         Spacer(Modifier.height(10.dp))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             FilledTonalButton(
                 onClick = { viewModel.startProject(InputMode.VOICE) { onOpenInput(it, "VOICE") } },
                 enabled = !state.creating,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(50.dp),
-                shape = RoundedCornerShape(14.dp)
+                modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(14.dp)
             ) {
-                Icon(Icons.Outlined.KeyboardVoice, null)
-                Spacer(Modifier.size(7.dp))
-                Text("Voice")
+                Icon(Icons.Outlined.KeyboardVoice, null); Spacer(Modifier.size(7.dp)); Text("Voice")
             }
             FilledTonalButton(
                 onClick = { viewModel.startProject(InputMode.TEXT) { onOpenInput(it, "TEXT") } },
                 enabled = !state.creating,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(50.dp),
-                shape = RoundedCornerShape(14.dp)
+                modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(14.dp)
             ) {
-                Icon(Icons.Outlined.EditNote, null)
-                Spacer(Modifier.size(7.dp))
-                Text("Type idea")
+                Icon(Icons.Outlined.EditNote, null); Spacer(Modifier.size(7.dp)); Text("Type idea")
             }
         }
 
-        state.error?.let {
-            Spacer(Modifier.height(14.dp))
-            ErrorBanner(it, onDismiss = viewModel::dismissError)
-        }
-
+        state.error?.let { Spacer(Modifier.height(14.dp)); ErrorBanner(it, onDismiss = viewModel::dismissError) }
         Spacer(Modifier.height(28.dp))
-
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    "Recent Projects",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = textPrimary
-                )
-                Text(
-                    "Your latest drafts",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = textSecondary
-                )
+                Text("Recent Projects", style = MaterialTheme.typography.titleLarge, color = textPrimary)
+                Text("Your latest drafts", style = MaterialTheme.typography.bodySmall, color = textSecondary)
             }
-            if (state.recent.isNotEmpty()) {
-                Text(
-                    "${state.recent.size}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
+            if (state.recent.isNotEmpty()) Text("${state.recent.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
-
         Spacer(Modifier.height(10.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
         Spacer(Modifier.height(12.dp))
 
         when {
             state.loading -> Text("Loading your projects…", color = textSecondary)
-            state.recent.isEmpty() -> Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            state.recent.isEmpty() -> Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
                 EmptyState(
                     title = "No stories yet",
                     body = "Start with a messy thought. We'll shape it into a story, script, article, or polished prose.",
@@ -225,34 +134,19 @@ fun HomeScreen(
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenProject(project.id) }
+                        modifier = Modifier.fillMaxWidth().clickable { onOpenProject(project.id) }
                     ) {
                         Column(Modifier.padding(16.dp)) {
-                            Text(
-                                project.title.ifBlank { "Untitled project" },
-                                style = MaterialTheme.typography.titleMedium,
-                                color = textPrimary
-                            )
+                            Text(project.title.ifBlank { "Untitled project" }, style = MaterialTheme.typography.titleMedium, color = textPrimary)
                             Spacer(Modifier.height(5.dp))
-                            Text(
-                                project.previewLine().ifBlank { "Empty draft" },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = textSecondary
-                            )
+                            Text(project.previewLine().ifBlank { "Empty draft" }, style = MaterialTheme.typography.bodyMedium, color = textSecondary)
                             Spacer(Modifier.height(9.dp))
-                            Text(
-                                "${formatBadge(project.format)} · ${formatModified(project.updatedAt)}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Text("${formatBadge(project.format)} · ${formatModified(project.updatedAt)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
             }
         }
-
         Spacer(Modifier.height(16.dp))
     }
 }
