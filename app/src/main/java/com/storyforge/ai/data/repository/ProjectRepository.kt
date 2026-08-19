@@ -41,15 +41,29 @@ class ProjectRepository(private val store: ProjectStore) {
         val current = store.getProject(project.id) ?: throw IllegalStateException("This project no longer exists.")
         val safe = project.copy(
             revision = current.revision + 1,
+            rawIdea = current.rawIdea,
+            format = current.format,
+            inputMode = current.inputMode,
+            createdAt = current.createdAt,
             generatedForIdeaHash = if (project.generatedText.isBlank()) "" else current.generatedForIdeaHash,
-            status = if (project.generatedText.isNotBlank() && current.generatedForIdeaHash.isNotBlank()) {
-                ProjectStatus.SAVED
-            } else {
-                ProjectStatus.DRAFT
-            },
+            status = if (project.generatedText.isNotBlank() && current.generatedForIdeaHash.isNotBlank()) ProjectStatus.SAVED else ProjectStatus.DRAFT,
             title = project.title.ifBlank { "Untitled" }
         )
         store.upsert(safe)
+    }
+
+    suspend fun updateManuscript(id: String, text: String, title: String): Project? = mutationMutex.withLock {
+        val current = store.getProject(id) ?: return@withLock null
+        if (deletedIds.contains(id)) return@withLock null
+        store.upsert(
+            current.copy(
+                generatedText = text,
+                generatedForIdeaHash = if (text.isBlank()) "" else current.generatedForIdeaHash,
+                title = title.ifBlank { current.title },
+                status = if (text.isBlank()) ProjectStatus.DRAFT else if (current.generatedForIdeaHash.isNotBlank()) ProjectStatus.SAVED else ProjectStatus.DRAFT,
+                revision = current.revision + 1
+            )
+        )
     }
 
     suspend fun autosave(project: Project): Project = save(project)
@@ -106,12 +120,7 @@ class ProjectRepository(private val store: ProjectStore) {
     suspend fun rename(id: String, title: String): Project? = mutationMutex.withLock {
         val current = store.getProject(id) ?: return@withLock null
         if (deletedIds.contains(id)) return@withLock null
-        store.upsert(
-            current.copy(
-                title = title.trim().ifBlank { current.title },
-                revision = current.revision + 1
-            )
-        )
+        store.upsert(current.copy(title = title.trim().ifBlank { current.title }, revision = current.revision + 1))
     }
 
     suspend fun delete(id: String) = mutationMutex.withLock {
