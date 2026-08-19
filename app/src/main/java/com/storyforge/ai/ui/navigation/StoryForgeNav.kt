@@ -81,7 +81,7 @@ fun StoryForgeNav(container: AppContainer, settingsVm: SettingsViewModel) {
                 val id = entry.arguments?.getString("projectId").orEmpty()
                 val mode = runCatching { InputMode.valueOf(entry.arguments?.getString("mode") ?: "TEXT") }.getOrDefault(InputMode.TEXT)
                 val app = LocalContext.current.applicationContext as Application
-                val vm: InputViewModel = viewModel(factory = InputViewModel.factory(app, container.projects, id, mode))
+                val vm: InputViewModel = viewModel(factory = InputViewModel.factory(app, container.projects, container.settings, id, mode))
                 InputScreen(vm, onBack = { nav.popBackStack() }, onContinue = { nav.navigate(Routes.format(it)) })
             }
             composable(route = Routes.FORMAT, arguments = listOf(navArgument("projectId") { type = NavType.StringType })) { entry ->
