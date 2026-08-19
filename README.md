@@ -1,81 +1,61 @@
 # StoryForge AI
 
-Android-first writing studio. Speak or type a raw thought, pick a form, and let a mock (swap-in) AI turn it into a novel chapter, screenplay, short story, YouTube script, or polished prose.
+StoryForge is an Android-first AI writing studio for turning rough thoughts, notes, or voice input into finished writing.
 
-## User journey
+## What StoryForge does
 
-Home → **New Project** → Voice or Text → raw idea → output format → generate → edit → save.
+**Raw idea / voice → understand intent → choose a format → generate → edit → save.**
 
-V1 formats: Novel, Movie Screenplay, Short Story, YouTube Script, Polished Writing.
+Supported formats include:
+
+- Novel
+- Movie Screenplay
+- Short Story
+- YouTube Script
+- Article
+- Essay
+- Poetry
+- Lyrics
+- Dialogue
+- Professional Writing
+- Polished Writing
+
+Writing preferences include tone, length, point of view, and language.
+
+## Bring your own AI key
+
+StoryForge does not ship with an API key. Each user can configure their own provider from **Settings → AI provider**.
+
+The current real provider is an OpenAI-compatible chat-completions endpoint. Users configure:
+
+- API endpoint
+- Model
+- API key
+
+The API key is encrypted with Android Keystore-backed storage on the device. It is not stored in DataStore, committed to Git, or included in the project source.
+
+A **Demo / Offline** mode is available so the app can be explored without credentials.
 
 ## Architecture
 
-UI, business logic, AI, and storage are separate.
+UI, domain models, AI, repositories, and local storage remain separated. `AiService` is the generation contract. `ConfiguredAiService` chooses between the real user-configured provider and demo mode without exposing credentials to UI code.
 
-| Layer | Android | Shared behavior |
-| --- | --- | --- |
-| UI | Jetpack Compose screens + Navigation | `web/` Material-style mobile client |
-| Domain | `domain/model` | `web/js/domain` |
-| AI | `AiService` + `MockAiService` | `MockAiService` in `web/js/services/ai.js` |
-| Storage | JSON files in app storage + DataStore settings | `localStorage` stores |
-
-`AiService` is the only generation contract. V1 uses **MockAiService** so the app runs without an API key. A later OpenAI / Gemini / Claude implementation can replace the mock without touching screens.
-
-Not in V1: image/video generation, payments, accounts, social, publishing.
-
-## Android app
-
-```
-app/src/main/java/com/storyforge/ai/
-  ui/           Compose screens (home, input, format, generation, editor, projects, settings)
-  data/ai/      AiService interface + mock writer
-  data/local/   JSON project store + settings
-  data/repository/
-  di/           AppContainer (manual DI)
-```
+## Android build
 
 Requirements: Android Studio Hedgehog+, JDK 17, Android SDK 34.
 
 ```bash
-# macOS / Linux
 chmod +x gradlew
 ./gradlew :app:assembleDebug
-
-# Windows
-gradlew.bat :app:assembleDebug
-```
-
-Install the debug APK from `app/build/outputs/apk/debug/`. Grant microphone permission for voice input. If speech recognition is unavailable, type instead — generation still works.
-
-Unit tests (JVM):
-
-```bash
 ./gradlew :app:testDebugUnitTest
 ```
 
-These cover mock generation, text metrics, and create → edit → save → reopen → rename → delete against the JSON store.
+On Windows use `gradlew.bat`.
 
-## Interactive preview
+The debug APK is written to `app/build/outputs/apk/debug/`.
 
-A mobile web client implements the same journey, mock writer, autosave, and local project storage so the product can be used in a browser.
+Voice input requires microphone permission. If speech recognition is unavailable, users can type instead.
 
-```bash
-node web/server.mjs
-# http://0.0.0.0:4173
-```
+## Product boundary
 
-Logic tests (no browser):
-
-```bash
-node web/js/verify.mjs
-```
-
-## Screens
-
-1. **Home** — StoryForge AI, New Project, Voice Input, Type Idea, recent projects
-2. **Input** — large editor, microphone, clear, word/character count, Continue
-3. **Format** — selectable cards for all five V1 forms
-4. **Generation** — progress, stop, error + retry
-5. **Editor** — edit text, regenerate, continue writing, copy, save (autosave)
-6. **Projects** — title, last modified, open, rename, delete
-7. **Settings** — theme, AI provider placeholder, writing preferences
+StoryForge is a writing/transformation app. It intentionally does **not** include a video generator, publishing platform, payments, accounts, or social feed.
