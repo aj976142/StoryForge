@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.storyforge.ai.data.repository.ProjectRepository
 import com.storyforge.ai.domain.model.Project
+import com.storyforge.ai.domain.model.ProjectVersion
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,7 +30,9 @@ class EditorViewModel(private val projectId: String, private val projects: Proje
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
     private var autosaveJob: Job? = null
 
-    init {
+    init { reload() }
+
+    fun reload() {
         viewModelScope.launch {
             val project = runCatching { projects.get(projectId) }.getOrNull()
             if (project == null) {
@@ -41,18 +44,18 @@ class EditorViewModel(private val projectId: String, private val projects: Proje
         }
     }
 
-    fun onTextChange(value: String) {
-        _state.update { it.copy(text = value, saved = false, copied = false) }
-        scheduleAutosave()
-    }
+    fun onTextChange(value: String) { _state.update { it.copy(text = value, saved = false, copied = false) }; scheduleAutosave() }
+    fun onTitleChange(value: String) { _state.update { it.copy(title = value, saved = false) }; scheduleAutosave() }
 
-    fun onTitleChange(value: String) {
-        _state.update { it.copy(title = value, saved = false) }
-        scheduleAutosave()
-    }
+    fun save(onDone: (() -> Unit)? = null) { viewModelScope.launch { persist(markSaved = true); onDone?.invoke() } }
 
-    fun save(onDone: (() -> Unit)? = null) {
-        viewModelScope.launch { persist(markSaved = true); onDone?.invoke() }
+    fun restore(versionId: String) {
+        viewModelScope.launch {
+            _state.update { it.copy(saving = true, error = null) }
+            val restored = runCatching { projects.restoreVersion(projectId, versionId) }.getOrNull()
+            if (restored == null) _state.update { it.copy(saving = false, error = "That version is no longer available.") }
+            else _state.update { it.copy(project = restored, text = restored.generatedText, title = restored.title, saving = false, saved = true) }
+        }
     }
 
     fun markCopied() {
@@ -69,14 +72,9 @@ class EditorViewModel(private val projectId: String, private val projects: Proje
         val current = _state.value
         if (current.project == null) return
         _state.update { it.copy(saving = true, error = null) }
-        runCatching {
-            projects.updateManuscript(projectId, current.text, current.title.trim())
-                ?: throw IllegalStateException("This project no longer exists.")
-        }.onSuccess { savedProject ->
-            _state.update { it.copy(project = savedProject, saving = false, saved = markSaved) }
-        }.onFailure { err ->
-            _state.update { it.copy(saving = false, error = err.message ?: "Save failed.") }
-        }
+        runCatching { projects.updateManuscript(projectId, current.text, current.title.trim()) ?: throw IllegalStateException("This project no longer exists.") }
+            .onSuccess { savedProject -> _state.update { it.copy(project = savedProject, saving = false, saved = markSaved) } }
+            .onFailure { err -> _state.update { it.copy(saving = false, error = err.message ?: "Save failed.") } }
     }
 
     companion object {
