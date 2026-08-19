@@ -4,6 +4,7 @@ import com.storyforge.ai.domain.model.OutputFormat
 import com.storyforge.ai.domain.model.WritingPreferences
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 
 /** Offline/demo writer. It never needs credentials and covers every StoryForge format. */
