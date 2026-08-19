@@ -8,18 +8,16 @@ data class Project(
     val title: String,
     val rawIdea: String = "",
     val generatedText: String = "",
-    // Fingerprint of the idea + format + writing preferences used by the current manuscript.
-    // Empty means legacy/untrusted output.
     val generatedForIdeaHash: String = "",
     val format: OutputFormat = OutputFormat.SHORT_STORY,
     val inputMode: InputMode = InputMode.TEXT,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val status: ProjectStatus = ProjectStatus.DRAFT,
-    // Monotonic in-app revision used to prevent stale generation results from overwriting edits.
     val revision: Long = 0L,
-    // Local snapshots. Kept with the project so they remain isolated from every other project.
-    val versions: List<ProjectVersion> = emptyList()
+    val versions: List<ProjectVersion> = emptyList(),
+    val favorite: Boolean = false,
+    val tags: List<String> = emptyList()
 )
 
 @Serializable
@@ -46,9 +44,7 @@ data class WritingPreferences(
 )
 
 @Serializable
-data class ThemePreference(
-    val mode: String = "system" // system | light | dark
-)
+data class ThemePreference(val mode: String = "system")
 
 @Serializable
 data class AiProviderSettings(
