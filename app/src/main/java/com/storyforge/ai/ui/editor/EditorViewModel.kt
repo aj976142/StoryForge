@@ -32,8 +32,20 @@ class EditorViewModel(private val projectId: String, private val projects: Proje
     init {
         viewModelScope.launch {
             val project = runCatching { projects.get(projectId) }.getOrNull()
-            if (project == null) _state.update { it.copy(loading = false, error = "Project could not be opened.") }
-            else _state.update { it.copy(project = project, text = project.generatedText.ifBlank { project.rawIdea }, title = project.title, loading = false) }
+            if (project == null) {
+                _state.update { it.copy(loading = false, error = "Project could not be opened.") }
+            } else {
+                // Never display generated content unless it is proven to belong to
+                // this project's current idea. This also protects older stored data.
+                val displayText = if (projects.generatedBelongsToIdea(project)) {
+                    project.generatedText
+                } else {
+                    project.rawIdea
+                }
+                _state.update {
+                    it.copy(project = project, text = displayText, title = project.title, loading = false)
+                }
+            }
         }
     }
 
