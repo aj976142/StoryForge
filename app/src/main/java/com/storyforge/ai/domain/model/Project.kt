@@ -17,7 +17,9 @@ data class Project(
     val revision: Long = 0L,
     val versions: List<ProjectVersion> = emptyList(),
     val favorite: Boolean = false,
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    // Project-local memory. It is never shared with another project.
+    val storyBible: StoryBible = StoryBible()
 )
 
 @Serializable
@@ -27,6 +29,22 @@ data class ProjectVersion(
     val text: String,
     val createdAt: Long = System.currentTimeMillis(),
     val label: String = "Autosave"
+)
+
+@Serializable
+data class StoryBible(
+    val characters: List<StoryBibleEntry> = emptyList(),
+    val locations: List<StoryBibleEntry> = emptyList(),
+    val plotNotes: List<String> = emptyList(),
+    val themes: List<String> = emptyList(),
+    val customNotes: String = ""
+)
+
+@Serializable
+data class StoryBibleEntry(
+    val id: String,
+    val name: String,
+    val details: String = ""
 )
 
 @Serializable
