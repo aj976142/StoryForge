@@ -4,16 +4,12 @@ import com.storyforge.ai.domain.model.OutputFormat
 import com.storyforge.ai.domain.model.WritingPreferences
 import kotlinx.coroutines.flow.Flow
 
-/**
- * Provider-agnostic AI contract. Swap [MockAiService] for a real
- * OpenAI / Gemini / Claude implementation without touching UI.
- */
+/** Provider-agnostic AI contract for drafting and focused editing actions. */
 interface AiService {
     val providerId: String
     val displayName: String
 
     fun generate(request: GenerationRequest): Flow<GenerationEvent>
-
     fun continueWriting(request: ContinueRequest): Flow<GenerationEvent>
 }
 
@@ -21,14 +17,17 @@ data class GenerationRequest(
     val idea: String,
     val format: OutputFormat,
     val preferences: WritingPreferences = WritingPreferences(),
-    val existingText: String? = null
+    val existingText: String? = null,
+    /** Optional focused instruction such as polish, expand, shorten or screenplay conversion. */
+    val instruction: String? = null
 )
 
 data class ContinueRequest(
     val idea: String,
     val format: OutputFormat,
     val currentText: String,
-    val preferences: WritingPreferences = WritingPreferences()
+    val preferences: WritingPreferences = WritingPreferences(),
+    val instruction: String? = null
 )
 
 sealed class GenerationEvent {
