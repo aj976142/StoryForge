@@ -49,7 +49,10 @@ fun StoryForgeScaffold(
 ) {
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) { content() }
-        NavigationBar {
+        NavigationBar(
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 4.dp
+        ) {
             NavigationBarItem(
                 selected = selected == "home",
                 onClick = onHome,
@@ -92,10 +95,19 @@ fun EmptyState(
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Outlined.AutoStories, contentDescription = null)
+            Icon(
+                Icons.Outlined.AutoStories,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         Spacer(Modifier.height(16.dp))
-        Text(title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+        Text(
+            title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center
+        )
         Spacer(Modifier.height(8.dp))
         Text(
             body,
@@ -137,7 +149,7 @@ fun LoadingBlock(label: String) {
     ) {
         CircularProgressIndicator()
         Spacer(Modifier.height(12.dp))
-        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground)
     }
 }
 
