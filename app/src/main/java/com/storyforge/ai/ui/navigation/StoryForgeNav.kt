@@ -70,7 +70,12 @@ fun StoryForgeNav(container: AppContainer, settingsVm: SettingsViewModel) {
         NavHost(navController = nav, startDestination = Routes.HOME) {
             composable(Routes.HOME) {
                 val vm: HomeViewModel = viewModel(factory = HomeViewModel.factory(container.projects))
-                HomeScreen(vm, onOpenInput = { id, mode -> nav.navigate(Routes.input(id, mode)) }, onOpenProject = { id -> nav.navigate(Routes.editor(id)) })
+                HomeScreen(
+                    vm,
+                    onOpenInput = { id, mode -> nav.navigate(Routes.input(id, mode)) },
+                    onOpenProject = { id -> nav.navigate(Routes.editor(id)) },
+                    onOpenProjects = { nav.navigate(Routes.PROJECTS) { launchSingleTop = true } }
+                )
             }
             composable(route = Routes.INPUT, arguments = listOf(navArgument("projectId") { type = NavType.StringType }, navArgument("mode") { type = NavType.StringType; defaultValue = "TEXT" })) { entry ->
                 val id = entry.arguments?.getString("projectId").orEmpty()
