@@ -20,7 +20,10 @@ import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,6 +38,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.storyforge.ai.data.ai.AiProviderCatalog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,8 +46,14 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var apiKey by remember { mutableStateOf("") }
     var showKey by remember { mutableStateOf(false) }
+    var providerExpanded by remember { mutableStateOf(false) }
+    var modelExpanded by remember { mutableStateOf(false) }
     val textPrimary = MaterialTheme.colorScheme.onBackground
     val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
+    val providerOptions = AiProviderCatalog.presets
+    val selectedPreset = AiProviderCatalog.preset(state.ai.provider)
+    val modelOptions = AiProviderCatalog.options(state.ai.provider, state.ai.model)
+
     Column(Modifier.fillMaxSize()) {
         TopAppBar(title = { Text("Settings", color = textPrimary) })
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
@@ -51,28 +61,118 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                 SectionTitle("AI provider")
                 Text("Bring your own API key. It stays encrypted on this device and is never included in the project or GitHub.", style = MaterialTheme.typography.bodyMedium, color = textSecondary)
                 Spacer(Modifier.height(12.dp))
-                ChipRow(listOf("openai-compatible" to "OpenAI-compatible", "mock" to "Demo / Offline"), state.ai.provider, viewModel::setProvider)
-                if (state.ai.provider == "openai-compatible") {
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(value = state.ai.endpoint, onValueChange = viewModel::setEndpoint, label = { Text("API endpoint") }, supportingText = { Text("OpenAI-compatible chat completions endpoint") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(value = state.ai.model, onValueChange = viewModel::setModel, label = { Text("Model") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, label = { Text(if (state.ai.apiKeyConfigured) "API key saved · enter a new one to replace" else "API key") }, visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = {
-                        Row {
-                            IconButton(onClick = { showKey = !showKey }) { Icon(if (showKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, "Show or hide API key") }
-                            if (state.ai.apiKeyConfigured) IconButton(onClick = viewModel::clearApiKey) { Icon(Icons.Outlined.Delete, "Remove API key") }
+
+                ExposedDropdownMenuBox(
+                    expanded = providerExpanded,
+                    onExpandedChange = { providerExpanded = !providerExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = selectedPreset?.name ?: "Custom / ${state.ai.provider}",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Provider") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(providerExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = providerExpanded,
+                        onDismissRequest = { providerExpanded = false }
+                    ) {
+                        providerOptions.forEach { preset ->
+                            DropdownMenuItem(
+                                text = { Text(preset.name) },
+                                onClick = {
+                                    viewModel.setProvider(preset.id)
+                                    providerExpanded = false
+                                }
+                            )
                         }
-                    }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        DropdownMenuItem(
+                            text = { Text("Demo / Offline") },
+                            onClick = {
+                                viewModel.setProvider(AiProviderCatalog.MOCK)
+                                providerExpanded = false
+                            }
+                        )
+                    }
+                }
+
+                if (selectedPreset?.note?.isNotBlank() == true) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(selectedPreset.note, style = MaterialTheme.typography.bodySmall, color = textSecondary)
+                }
+
+                if (state.ai.provider != AiProviderCatalog.MOCK) {
+                    Spacer(Modifier.height(12.dp))
+                    ExposedDropdownMenuBox(
+                        expanded = modelExpanded,
+                        onExpandedChange = { modelExpanded = !modelExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = state.ai.model,
+                            onValueChange = viewModel::setModel,
+                            label = { Text("AI model") },
+                            supportingText = { Text("Choose a preset or type any model ID supported by the provider") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(modelExpanded) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                            singleLine = true
+                        )
+                        ExposedDropdownMenu(
+                            expanded = modelExpanded,
+                            onDismissRequest = { modelExpanded = false }
+                        ) {
+                            modelOptions.forEach { model ->
+                                DropdownMenuItem(
+                                    text = { Text(model) },
+                                    onClick = {
+                                        viewModel.setModel(model)
+                                        modelExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = state.ai.endpoint,
+                        onValueChange = viewModel::setEndpoint,
+                        label = { Text("API endpoint") },
+                        supportingText = { Text("You can override the preset endpoint when needed") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = apiKey,
+                        onValueChange = { apiKey = it },
+                        label = { Text(if (state.ai.apiKeyConfigured) "API key saved · enter a new one to replace" else "API key") },
+                        visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            Row {
+                                IconButton(onClick = { showKey = !showKey }) { Icon(if (showKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, "Show or hide API key") }
+                                if (state.ai.apiKeyConfigured) IconButton(onClick = viewModel::clearApiKey) { Icon(Icons.Outlined.Delete, "Remove API key") }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         Button(onClick = { viewModel.saveApiKey(apiKey); apiKey = "" }, modifier = Modifier.weight(1f)) { Text("Save key") }
                         OutlinedButton(onClick = viewModel::testConnection, enabled = !state.testingConnection, modifier = Modifier.weight(1f)) { Text(if (state.testingConnection) "Testing…" else "Test") }
                     }
-                    if (state.ai.apiKeyConfigured) { Spacer(Modifier.height(8.dp)); Text("API key configured", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
-                    state.connectionMessage?.let { Spacer(Modifier.height(8.dp)); Text(it, color = textSecondary, style = MaterialTheme.typography.bodySmall) }
+                    if (state.ai.apiKeyConfigured) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("API key configured", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                    }
+                    state.connectionMessage?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, color = textSecondary, style = MaterialTheme.typography.bodySmall)
+                    }
                 } else {
-                    Spacer(Modifier.height(10.dp)); Text("Demo mode works without an API key and is useful for testing the app offline.", style = MaterialTheme.typography.bodyMedium, color = textSecondary)
+                    Spacer(Modifier.height(10.dp))
+                    Text("Demo mode works without an API key and is useful for testing the app offline.", style = MaterialTheme.typography.bodyMedium, color = textSecondary)
                 }
             }
 
