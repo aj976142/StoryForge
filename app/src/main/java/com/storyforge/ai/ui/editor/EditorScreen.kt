@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -42,10 +45,13 @@ fun EditorScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val wordCount = state.text.trim().split(Regex("\\s+")).count { it.isNotBlank() }
+    val textPrimary = MaterialTheme.colorScheme.onBackground
+    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Editor") },
+            title = { Text("Editor", color = textPrimary) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
@@ -58,7 +64,7 @@ fun EditorScreen(
             else -> Column(
                 Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 OutlinedTextField(
                     value = state.title,
@@ -74,19 +80,30 @@ fun EditorScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    placeholder = { Text("Your finished writing appears here…") }
                 )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    when {
-                        state.saving -> "Autosaving…"
-                        state.saved -> "Saved"
-                        state.copied -> "Copied"
-                        else -> state.project?.format?.displayName ?: ""
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        when {
+                            state.saving -> "Autosaving…"
+                            state.saved -> "Saved"
+                            state.copied -> "Copied"
+                            else -> state.project?.format?.displayName ?: ""
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        "$wordCount words",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textSecondary
+                    )
+                }
                 state.error?.let {
                     Spacer(Modifier.height(8.dp))
                     ErrorBanner(it)
@@ -96,11 +113,15 @@ fun EditorScreen(
                     OutlinedButton(
                         onClick = { onRegenerate(state.project!!.id) },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Regenerate") }
+                    ) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = null)
+                        Spacer(Modifier.padding(2.dp))
+                        Text("Regenerate")
+                    }
                     OutlinedButton(
                         onClick = { onContinueWriting(state.project!!.id) },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Continue Writing") }
+                    ) { Text("Continue") }
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -111,11 +132,19 @@ fun EditorScreen(
                             viewModel.markCopied()
                         },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Copy") }
+                    ) {
+                        Icon(Icons.Outlined.ContentCopy, contentDescription = null)
+                        Spacer(Modifier.padding(2.dp))
+                        Text("Copy")
+                    }
                     Button(
                         onClick = { viewModel.save() },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Save") }
+                    ) {
+                        Icon(Icons.Outlined.Save, contentDescription = null)
+                        Spacer(Modifier.padding(2.dp))
+                        Text("Save")
+                    }
                 }
             }
         }
