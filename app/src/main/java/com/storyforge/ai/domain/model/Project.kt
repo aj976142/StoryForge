@@ -17,7 +17,18 @@ data class Project(
     val updatedAt: Long = System.currentTimeMillis(),
     val status: ProjectStatus = ProjectStatus.DRAFT,
     // Monotonic in-app revision used to prevent stale generation results from overwriting edits.
-    val revision: Long = 0L
+    val revision: Long = 0L,
+    // Local snapshots. Kept with the project so they remain isolated from every other project.
+    val versions: List<ProjectVersion> = emptyList()
+)
+
+@Serializable
+data class ProjectVersion(
+    val id: String,
+    val title: String,
+    val text: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    val label: String = "Autosave"
 )
 
 @Serializable
