@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
@@ -75,6 +76,7 @@ fun EditorScreen(
     var showBrain by remember { mutableStateOf(false) }
     var showRename by remember { mutableStateOf(false) }
     var showActions by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
     var renameText by remember(state.title) { mutableStateOf(state.title) }
 
     fun copyStory() {
@@ -97,6 +99,7 @@ fun EditorScreen(
                     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                         DropdownMenuItem(text = { Text("Rename") }, onClick = { menuExpanded = false; renameText = state.title; showRename = true })
                         DropdownMenuItem(text = { Text("AI writing tools") }, leadingIcon = { Icon(Icons.Outlined.AutoAwesome, null) }, onClick = { menuExpanded = false; showActions = true })
+                        DropdownMenuItem(text = { Text("Version history") }, leadingIcon = { Icon(Icons.Outlined.History, null) }, onClick = { menuExpanded = false; showHistory = true })
                         DropdownMenuItem(text = { Text("Story Brain") }, leadingIcon = { Icon(Icons.Outlined.AutoAwesome, null) }, onClick = { menuExpanded = false; showBrain = true })
                         DropdownMenuItem(text = { Text("Writing stats") }, leadingIcon = { Icon(Icons.Outlined.Info, null) }, onClick = { menuExpanded = false; showStats = true })
                         DropdownMenuItem(text = { Text("Share story") }, leadingIcon = { Icon(Icons.Outlined.Share, null) }, onClick = { menuExpanded = false; shareStory() })
@@ -138,32 +141,42 @@ fun EditorScreen(
     }
 
     if (showActions) {
-        AlertDialog(
-            onDismissRequest = { showActions = false },
-            title = { Text("AI writing tools") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("These actions keep your idea and voice, then change only what you ask for.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    listOf(
-                        "Polish writing" to "Polish grammar, clarity, flow and word choice while preserving my voice.",
-                        "Make it more cinematic" to "Make the writing more cinematic using stronger scenes, sensory detail and emotional beats without changing the core events.",
-                        "Expand" to "Expand the writing with useful detail, context and stronger transitions without adding contradictions.",
-                        "Shorten" to "Make the writing substantially shorter while preserving the key meaning, facts and emotional point.",
-                        "Make natural" to "Rewrite this to sound natural and human, removing stiff or generic AI-like phrasing while preserving meaning.",
-                        "Convert to screenplay" to "Convert this material into a professional movie screenplay while preserving the story, characters and events."
-                    ).forEach { (label, instruction) ->
-                        OutlinedButton(onClick = { showActions = false; state.project?.id?.let { onWritingAction(it, instruction) } }, modifier = Modifier.fillMaxWidth()) { Text(label) }
+        AlertDialog(onDismissRequest = { showActions = false }, title = { Text("AI writing tools") }, text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("These actions keep your idea and voice, then change only what you ask for.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                listOf(
+                    "Polish writing" to "Polish grammar, clarity, flow and word choice while preserving my voice.",
+                    "Make it more cinematic" to "Make the writing more cinematic using stronger scenes, sensory detail and emotional beats without changing the core events.",
+                    "Expand" to "Expand the writing with useful detail, context and stronger transitions without adding contradictions.",
+                    "Shorten" to "Make the writing substantially shorter while preserving the key meaning, facts and emotional point.",
+                    "Make natural" to "Rewrite this to sound natural and human, removing stiff or generic AI-like phrasing while preserving meaning.",
+                    "Convert to screenplay" to "Convert this material into a professional movie screenplay while preserving the story, characters and events."
+                ).forEach { (label, instruction) -> OutlinedButton(onClick = { showActions = false; state.project?.id?.let { onWritingAction(it, instruction) } }, modifier = Modifier.fillMaxWidth()) { Text(label) } }
+            }
+        }, confirmButton = { TextButton(onClick = { showActions = false }) { Text("Cancel") } })
+    }
+
+    if (showHistory) {
+        val versions = state.project?.versions.orEmpty().asReversed()
+        AlertDialog(onDismissRequest = { showHistory = false }, title = { Text("Version history") }, text = {
+            if (versions.isEmpty()) Text("No saved versions yet. StoryForge will create snapshots as you edit and generate.")
+            else Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Your revisions stay inside this project and never become context for another project.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                versions.forEach { version ->
+                    OutlinedButton(onClick = { viewModel.restore(version.id); showHistory = false }, modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.fillMaxWidth()) {
+                            Text(version.label, style = MaterialTheme.typography.labelLarge)
+                            Text(version.title.ifBlank { "Untitled" }, style = MaterialTheme.typography.bodyMedium)
+                            Text("${version.text.trim().split(Regex("\\s+")).count { it.isNotBlank() }} words", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
-            },
-            confirmButton = { TextButton(onClick = { showActions = false }) { Text("Cancel") } }
-        )
+            }
+        }, confirmButton = { TextButton(onClick = { showHistory = false }) { Text("Close") } })
     }
 
     if (showRename) AlertDialog(onDismissRequest = { showRename = false }, title = { Text("Rename project") }, text = { OutlinedTextField(value = renameText, onValueChange = { renameText = it }, singleLine = true, label = { Text("Title") }) }, confirmButton = { TextButton(onClick = { viewModel.onTitleChange(renameText.trim()); viewModel.save(); showRename = false }) { Text("Save") } }, dismissButton = { TextButton(onClick = { showRename = false }) { Text("Cancel") } })
-
     if (showStats) AlertDialog(onDismissRequest = { showStats = false }, title = { Text("Writing stats") }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("$wordCount words"); Text("${state.text.length} characters"); Text("Estimated reading time: ${((wordCount + 179) / 180).coerceAtLeast(1)} min"); Text("Format: ${state.project?.format?.displayName ?: "Draft"}") } }, confirmButton = { TextButton(onClick = { showStats = false }) { Text("Done") } })
-
     if (showBrain) {
         val brain = remember(state.text) { StoryBrain.analyze(state.text) }
         AlertDialog(onDismissRequest = { showBrain = false }, title = { Text("Story Brain") }, text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Continuity snapshot", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Text("Characters: ${brain.characters.ifEmpty { listOf("Not detected yet") }.joinToString(", ")}"); Text("Places: ${brain.places.ifEmpty { listOf("Not detected yet") }.joinToString(", ")}"); Text("Themes: ${brain.themes.ifEmpty { listOf("Not enough text yet") }.joinToString(", ")}"); Text("${brain.wordCount} words · ~${brain.readingMinutes} min read", color = MaterialTheme.colorScheme.onSurfaceVariant); Text("This snapshot is generated offline on your device.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }, confirmButton = { TextButton(onClick = { showBrain = false }) { Text("Done") } })
