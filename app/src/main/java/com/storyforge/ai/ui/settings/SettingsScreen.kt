@@ -39,15 +39,17 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var apiKey by remember { mutableStateOf("") }
     var showKey by remember { mutableStateOf(false) }
+    val textPrimary = MaterialTheme.colorScheme.onBackground
+    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
 
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("Settings") })
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
+        TopAppBar(title = { Text("Settings", color = textPrimary) })
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp)) {
             SectionTitle("AI provider")
             Text(
-                "Use your own API key. StoryForge stores it encrypted on this device and never puts it in the project or GitHub.",
+                "Bring your own API key. It stays encrypted on this device and is never included in the project or GitHub.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = textSecondary
             )
             Spacer(Modifier.height(12.dp))
             ChipRow(
@@ -57,9 +59,22 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
             )
             if (state.ai.provider == "openai-compatible") {
                 Spacer(Modifier.height(12.dp))
-                OutlinedTextField(value = state.ai.endpoint, onValueChange = viewModel::setEndpoint, label = { Text("API endpoint") }, supportingText = { Text("OpenAI-compatible chat completions endpoint") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(
+                    value = state.ai.endpoint,
+                    onValueChange = viewModel::setEndpoint,
+                    label = { Text("API endpoint") },
+                    supportingText = { Text("OpenAI-compatible chat completions endpoint") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = state.ai.model, onValueChange = viewModel::setModel, label = { Text("Model") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(
+                    value = state.ai.model,
+                    onValueChange = viewModel::setModel,
+                    label = { Text("Model") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = apiKey,
@@ -68,8 +83,17 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                     visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
                         Row {
-                            IconButton(onClick = { showKey = !showKey }) { Icon(if (showKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, "Show/hide key") }
-                            if (state.ai.apiKeyConfigured) IconButton(onClick = viewModel::clearApiKey) { Icon(Icons.Outlined.Delete, "Remove API key") }
+                            IconButton(onClick = { showKey = !showKey }) {
+                                Icon(
+                                    if (showKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                    "Show or hide API key"
+                                )
+                            }
+                            if (state.ai.apiKeyConfigured) {
+                                IconButton(onClick = viewModel::clearApiKey) {
+                                    Icon(Icons.Outlined.Delete, "Remove API key")
+                                }
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -78,7 +102,9 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     Button(onClick = { viewModel.saveApiKey(apiKey); apiKey = "" }, modifier = Modifier.weight(1f)) { Text("Save key") }
-                    OutlinedButton(onClick = viewModel::testConnection, enabled = !state.testingConnection, modifier = Modifier.weight(1f)) { Text(if (state.testingConnection) "Testing…" else "Test connection") }
+                    OutlinedButton(onClick = viewModel::testConnection, enabled = !state.testingConnection, modifier = Modifier.weight(1f)) {
+                        Text(if (state.testingConnection) "Testing…" else "Test connection")
+                    }
                 }
                 if (state.ai.apiKeyConfigured) {
                     Spacer(Modifier.height(8.dp))
@@ -86,11 +112,11 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                 }
                 state.connectionMessage?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(it, color = textSecondary)
                 }
             } else {
-                Spacer(Modifier.height(8.dp))
-                Text("Demo mode works without an API key and is useful for exploring the app offline.", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(10.dp))
+                Text("Demo mode works without an API key, so you can explore StoryForge offline.", style = MaterialTheme.typography.bodyMedium, color = textSecondary)
             }
 
             Spacer(Modifier.height(28.dp))
@@ -107,16 +133,34 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
             Spacer(Modifier.height(24.dp))
             SectionTitle("Theme")
             ChipRow(listOf("system" to "System", "light" to "Light", "dark" to "Dark"), state.themeMode, viewModel::setTheme)
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
 
-@Composable private fun SectionTitle(text: String) { Text(text, style = MaterialTheme.typography.titleLarge); Spacer(Modifier.height(8.dp)) }
-@Composable private fun Label(text: String) { Spacer(Modifier.height(12.dp)); Text(text, style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(6.dp)) }
+@Composable
+private fun SectionTitle(text: String) {
+    Text(text, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
+    Spacer(Modifier.height(8.dp))
+}
+
+@Composable
+private fun Label(text: String) {
+    Spacer(Modifier.height(12.dp))
+    Text(text, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+    Spacer(Modifier.height(6.dp))
+}
 
 @OptIn(ExperimentalLayoutApi::class)
-@Composable private fun ChipRow(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        options.forEach { (value, label) -> FilterChip(selected = selected == value, onClick = { onSelect(value) }, label = { Text(label) }) }
+@Composable
+private fun ChipRow(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        options.forEach { (value, label) ->
+            FilterChip(selected = selected == value, onClick = { onSelect(value) }, label = { Text(label) })
+        }
     }
 }
