@@ -46,19 +46,10 @@ fun StoryForgeNav(container: AppContainer, settingsVm: SettingsViewModel) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route.orEmpty()
-    val tab = when {
-        route.startsWith("projects") -> "projects"
-        route.startsWith("settings") -> "settings"
-        else -> "home"
-    }
+    val tab = when { route.startsWith("projects") -> "projects"; route.startsWith("settings") -> "settings"; else -> "home" }
     val focusedScreen = route.startsWith("input") || route.startsWith("format") || route.startsWith("generation") || route.startsWith("editor")
 
-    fun goHome() {
-        nav.navigate(Routes.HOME) {
-            popUpTo(Routes.HOME) { inclusive = false }
-            launchSingleTop = true
-        }
-    }
+    fun goHome() { nav.navigate(Routes.HOME) { popUpTo(Routes.HOME) { inclusive = false }; launchSingleTop = true } }
 
     StoryForgeScaffold(
         selected = tab,
@@ -70,12 +61,7 @@ fun StoryForgeNav(container: AppContainer, settingsVm: SettingsViewModel) {
         NavHost(navController = nav, startDestination = Routes.HOME) {
             composable(Routes.HOME) {
                 val vm: HomeViewModel = viewModel(factory = HomeViewModel.factory(container.projects))
-                HomeScreen(
-                    vm,
-                    onOpenInput = { id, mode -> nav.navigate(Routes.input(id, mode)) },
-                    onOpenProject = { id -> nav.navigate(Routes.editor(id)) },
-                    onOpenProjects = { nav.navigate(Routes.PROJECTS) { launchSingleTop = true } }
-                )
+                HomeScreen(vm, onOpenInput = { id, mode -> nav.navigate(Routes.input(id, mode)) }, onOpenProject = { id -> nav.navigate(Routes.editor(id)) }, onOpenProjects = { nav.navigate(Routes.PROJECTS) { launchSingleTop = true } })
             }
             composable(route = Routes.INPUT, arguments = listOf(navArgument("projectId") { type = NavType.StringType }, navArgument("mode") { type = NavType.StringType; defaultValue = "TEXT" })) { entry ->
                 val id = entry.arguments?.getString("projectId").orEmpty()
@@ -88,16 +74,23 @@ fun StoryForgeNav(container: AppContainer, settingsVm: SettingsViewModel) {
                 val id = entry.arguments?.getString("projectId").orEmpty()
                 FormatScreen(id, container.projects, onBack = { nav.popBackStack() }, onContinue = { nav.navigate(Routes.generation(it)) })
             }
-            composable(route = Routes.GENERATION, arguments = listOf(navArgument("projectId") { type = NavType.StringType }, navArgument("continueWrite") { type = NavType.BoolType; defaultValue = false })) { entry ->
+            composable(route = Routes.GENERATION, arguments = listOf(navArgument("projectId") { type = NavType.StringType }, navArgument("continueWrite") { type = NavType.BoolType; defaultValue = false }, navArgument("instruction") { type = NavType.StringType; defaultValue = "" })) { entry ->
                 val id = entry.arguments?.getString("projectId").orEmpty()
                 val continueWrite = entry.arguments?.getBoolean("continueWrite") ?: false
-                val vm: GenerationViewModel = viewModel(factory = GenerationViewModel.factory(id, continueWrite, container.projects, container.settings, container.aiService))
+                val instruction = entry.arguments?.getString("instruction")?.takeIf { it.isNotBlank() }
+                val vm: GenerationViewModel = viewModel(factory = GenerationViewModel.factory(id, continueWrite, instruction, container.projects, container.settings, container.aiService))
                 GenerationScreen(vm, onFinished = { finishedId -> nav.navigate(Routes.editor(finishedId)) { popUpTo(Routes.HOME) } }, onBack = { nav.popBackStack() })
             }
             composable(route = Routes.EDITOR, arguments = listOf(navArgument("projectId") { type = NavType.StringType })) { entry ->
                 val id = entry.arguments?.getString("projectId").orEmpty()
                 val vm: EditorViewModel = viewModel(factory = EditorViewModel.factory(id, container.projects))
-                EditorScreen(vm, onBack = { nav.popBackStack() }, onRegenerate = { nav.navigate(Routes.generation(it, false)) }, onContinueWriting = { nav.navigate(Routes.generation(it, true)) })
+                EditorScreen(
+                    vm,
+                    onBack = { nav.popBackStack() },
+                    onRegenerate = { nav.navigate(Routes.generation(it, false)) },
+                    onContinueWriting = { nav.navigate(Routes.generation(it, true)) },
+                    onWritingAction = { projectId, action -> nav.navigate(Routes.generation(projectId, false, action)) }
+                )
             }
             composable(Routes.PROJECTS) {
                 val vm: ProjectsViewModel = viewModel(factory = ProjectsViewModel.factory(container.projects))
