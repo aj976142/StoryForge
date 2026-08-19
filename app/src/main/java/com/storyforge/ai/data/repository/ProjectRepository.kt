@@ -5,12 +5,17 @@ import com.storyforge.ai.domain.model.InputMode
 import com.storyforge.ai.domain.model.OutputFormat
 import com.storyforge.ai.domain.model.Project
 import com.storyforge.ai.domain.model.ProjectStatus
+import com.storyforge.ai.domain.model.WritingPreferences
 import com.storyforge.ai.util.GenerationProvenance
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 class ProjectRepository(private val store: ProjectStore) {
+    private val mutationMutex = Mutex()
+    private val deletedIds = mutableSetOf<String>()
 
     fun observeAll(): Flow<List<Project>> = store.observeProjects()
 
@@ -29,59 +34,101 @@ class ProjectRepository(private val store: ProjectStore) {
             updatedAt = now,
             status = ProjectStatus.DRAFT
         )
-        return store.upsert(project)
+        return mutationMutex.withLock { store.upsert(project) }
     }
 
-    suspend fun save(project: Project): Project = store.upsert(
-        project.copy(
-            status = if (project.generatedText.isNotBlank() && generatedBelongsToIdea(project)) {
+    suspend fun save(project: Project): Project = mutationMutex.withLock {
+        if (deletedIds.contains(project.id) || store.getProject(project.id) == null) {
+            throw IllegalStateException("This project no longer exists.")
+        }
+        val current = store.getProject(project.id) ?: throw IllegalStateException("This project no longer exists.")
+        val safe = project.copy(
+            revision = current.revision + 1,
+            generatedForIdeaHash = current.generatedForIdeaHash,
+            status = if (project.generatedText.isNotBlank() && generatedBelongsToContext(project)) {
                 ProjectStatus.SAVED
             } else {
                 ProjectStatus.DRAFT
             },
             title = project.title.ifBlank { "Untitled" }
         )
-    )
+        store.upsert(safe)
+    }
 
-    suspend fun autosave(project: Project): Project = store.upsert(project)
+    suspend fun autosave(project: Project): Project = save(project)
 
-    suspend fun updateIdea(id: String, idea: String): Project? {
-        val current = store.getProject(id) ?: return null
+    suspend fun updateIdea(id: String, idea: String): Project? = mutationMutex.withLock {
+        val current = store.getProject(id) ?: return@withLock null
+        if (deletedIds.contains(id)) return@withLock null
         val changed = GenerationProvenance.normalizeIdea(current.rawIdea) != GenerationProvenance.normalizeIdea(idea)
-        return store.upsert(
+        val updated = current.copy(
+            rawIdea = idea,
+            generatedText = if (changed) "" else current.generatedText,
+            generatedForIdeaHash = if (changed) "" else current.generatedForIdeaHash,
+            status = if (changed) ProjectStatus.DRAFT else current.status,
+            revision = current.revision + 1
+        )
+        store.upsert(updated)
+    }
+
+    suspend fun updateFormat(id: String, format: OutputFormat): Project? = mutationMutex.withLock {
+        val current = store.getProject(id) ?: return@withLock null
+        if (deletedIds.contains(id)) return@withLock null
+        if (current.format == format) return@withLock current
+        // A different output form invalidates the old manuscript context.
+        store.upsert(
             current.copy(
-                rawIdea = idea,
-                // Changing the idea invalidates any previous generated draft.
-                generatedText = if (changed) "" else current.generatedText,
-                generatedForIdeaHash = if (changed) "" else current.generatedForIdeaHash,
-                status = if (changed) ProjectStatus.DRAFT else current.status
+                format = format,
+                generatedText = "",
+                generatedForIdeaHash = "",
+                status = ProjectStatus.DRAFT,
+                revision = current.revision + 1
             )
         )
     }
 
-    suspend fun updateFormat(id: String, format: OutputFormat): Project? {
-        val current = store.getProject(id) ?: return null
-        return store.upsert(current.copy(format = format))
-    }
-
-    suspend fun updateGenerated(id: String, text: String, title: String? = null): Project? {
-        val current = store.getProject(id) ?: return null
-        return store.upsert(
+    suspend fun updateGenerated(
+        id: String,
+        expectedRevision: Long,
+        text: String,
+        title: String?,
+        preferences: WritingPreferences
+    ): Project? = mutationMutex.withLock {
+        val current = store.getProject(id) ?: return@withLock null
+        if (deletedIds.contains(id) || current.revision != expectedRevision) return@withLock null
+        val fingerprint = GenerationProvenance.fingerprint(current.rawIdea, current.format, preferences)
+        store.upsert(
             current.copy(
                 generatedText = text,
-                generatedForIdeaHash = GenerationProvenance.hashIdea(current.rawIdea),
+                generatedForIdeaHash = fingerprint,
                 title = title?.takeIf { it.isNotBlank() } ?: current.title,
-                status = ProjectStatus.GENERATED
+                status = ProjectStatus.GENERATED,
+                revision = current.revision + 1
             )
         )
     }
 
-    suspend fun rename(id: String, title: String): Project? = store.rename(id, title)
+    suspend fun rename(id: String, title: String): Project? = mutationMutex.withLock {
+        val current = store.getProject(id) ?: return@withLock null
+        if (deletedIds.contains(id)) return@withLock null
+        store.upsert(
+            current.copy(
+                title = title.trim().ifBlank { current.title },
+                revision = current.revision + 1
+            )
+        )
+    }
 
-    suspend fun delete(id: String) = store.delete(id)
+    suspend fun delete(id: String) = mutationMutex.withLock {
+        deletedIds += id
+        store.delete(id)
+    }
 
-    fun generatedBelongsToIdea(project: Project): Boolean =
+    fun generatedBelongsToContext(project: Project, preferences: WritingPreferences = WritingPreferences()): Boolean =
         project.generatedText.isNotBlank() &&
             project.generatedForIdeaHash.isNotBlank() &&
-            project.generatedForIdeaHash == GenerationProvenance.hashIdea(project.rawIdea)
+            project.generatedForIdeaHash == GenerationProvenance.fingerprint(project.rawIdea, project.format, preferences)
+
+    fun isGeneratedForCurrentContext(project: Project, preferences: WritingPreferences): Boolean =
+        generatedBelongsToContext(project, preferences)
 }
