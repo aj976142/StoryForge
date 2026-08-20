@@ -25,6 +25,36 @@ enum class OutputFormat(
         tagline = "Hook, story, and CTA",
         description = "Spoken-word pacing with a hook, beats, b-roll notes, and a closer."
     ),
+    ARTICLE(
+        displayName = "Article",
+        tagline = "Clear, structured nonfiction",
+        description = "Turn notes into a readable article with a strong lead and logical sections."
+    ),
+    ESSAY(
+        displayName = "Essay",
+        tagline = "Thoughtful argument or reflection",
+        description = "Develop an idea into a coherent essay while preserving the author's point of view."
+    ),
+    POETRY(
+        displayName = "Poetry",
+        tagline = "Images, rhythm, and feeling",
+        description = "Shape the idea into expressive poetry without losing its emotional core."
+    ),
+    LYRICS(
+        displayName = "Lyrics",
+        tagline = "Verses, chorus, and bridge",
+        description = "Turn a feeling or story into singable lyrics with a memorable structure."
+    ),
+    DIALOGUE(
+        displayName = "Dialogue",
+        tagline = "Natural character conversation",
+        description = "Build believable dialogue while preserving each character's intent and voice."
+    ),
+    PROFESSIONAL(
+        displayName = "Professional Writing",
+        tagline = "Clear and credible communication",
+        description = "Polish ideas into emails, proposals, reports, bios, and other professional copy."
+    ),
     POLISHED_WRITING(
         displayName = "Polished Writing",
         tagline = "Cleaner, stronger prose",

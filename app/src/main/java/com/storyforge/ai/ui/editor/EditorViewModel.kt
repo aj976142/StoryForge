@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.storyforge.ai.data.repository.ProjectRepository
 import com.storyforge.ai.domain.model.Project
+import com.storyforge.ai.domain.model.StoryBible
+import com.storyforge.ai.domain.model.StoryBibleEntry
+import com.storyforge.ai.util.StoryBrain
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 data class EditorUiState(
     val project: Project? = null,
@@ -24,83 +28,76 @@ data class EditorUiState(
     val error: String? = null
 )
 
-class EditorViewModel(
-    private val projectId: String,
-    private val projects: ProjectRepository
-) : ViewModel() {
+class EditorViewModel(private val projectId: String, private val projects: ProjectRepository) : ViewModel() {
     private val _state = MutableStateFlow(EditorUiState())
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
     private var autosaveJob: Job? = null
 
-    init {
+    init { reload() }
+
+    fun reload() {
         viewModelScope.launch {
             val project = runCatching { projects.get(projectId) }.getOrNull()
-            if (project == null) {
-                _state.update { it.copy(loading = false, error = "Project could not be opened.") }
-            } else {
-                _state.update {
-                    it.copy(
-                        project = project,
-                        text = project.generatedText.ifBlank { project.rawIdea },
-                        title = project.title,
-                        loading = false
-                    )
-                }
+            if (project == null) _state.update { it.copy(loading = false, error = "Project could not be opened.") }
+            else {
+                val displayText = if (projects.generatedBelongsToContext(project)) project.generatedText else project.rawIdea
+                _state.update { it.copy(project = project, text = displayText, title = project.title, loading = false) }
             }
         }
     }
 
-    fun onTextChange(value: String) {
-        _state.update { it.copy(text = value, saved = false, copied = false) }
-        scheduleAutosave()
-    }
+    fun onTextChange(value: String) { _state.update { it.copy(text = value, saved = false, copied = false) }; scheduleAutosave() }
+    fun onTitleChange(value: String) { _state.update { it.copy(title = value, saved = false) }; scheduleAutosave() }
+    fun save(onDone: (() -> Unit)? = null) { viewModelScope.launch { if (persist(markSaved = true)) onDone?.invoke() } }
 
-    fun onTitleChange(value: String) {
-        _state.update { it.copy(title = value, saved = false) }
-        scheduleAutosave()
-    }
-
-    fun save(onDone: (() -> Unit)? = null) {
+    fun updateStoryBible(bible: StoryBible) {
         viewModelScope.launch {
-            persist(markSaved = true)
-            onDone?.invoke()
+            _state.update { it.copy(saving = true, error = null) }
+            val updated = runCatching { projects.updateStoryBible(projectId, bible) }.getOrNull()
+            if (updated == null) _state.update { it.copy(saving = false, error = "Could not save Story Bible.") }
+            else _state.update { it.copy(project = updated, saving = false, saved = true, error = null) }
+        }
+    }
+
+    fun restore(versionId: String) {
+        viewModelScope.launch {
+            _state.update { it.copy(saving = true, error = null) }
+            val restored = runCatching { projects.restoreVersion(projectId, versionId) }.getOrNull()
+            if (restored == null) _state.update { it.copy(saving = false, error = "That version is no longer available.") }
+            else _state.update { it.copy(project = restored, text = restored.generatedText, title = restored.title, saving = false, saved = true) }
         }
     }
 
     fun markCopied() {
         _state.update { it.copy(copied = true) }
-        viewModelScope.launch {
-            delay(1600)
-            _state.update { it.copy(copied = false) }
-        }
+        viewModelScope.launch { delay(1600); _state.update { it.copy(copied = false) } }
     }
 
-    private fun scheduleAutosave() {
-        autosaveJob?.cancel()
-        autosaveJob = viewModelScope.launch {
-            delay(500)
-            persist(markSaved = false)
-        }
-    }
+    private fun scheduleAutosave() { autosaveJob?.cancel(); autosaveJob = viewModelScope.launch { delay(600); persist(markSaved = false) } }
 
-    private suspend fun persist(markSaved: Boolean) {
+    private suspend fun persist(markSaved: Boolean): Boolean {
         val current = _state.value
-        val project = current.project ?: return
+        if (current.project == null) return false
         _state.update { it.copy(saving = true, error = null) }
-        val updated = project.copy(generatedText = current.text, title = current.title.ifBlank { project.title })
-        val result = runCatching { projects.save(updated) }
-        result.onSuccess { saved ->
-            _state.update { it.copy(project = saved, saving = false, saved = markSaved || true) }
-        }.onFailure { err ->
-            _state.update { it.copy(saving = false, error = err.message ?: "Save failed.") }
-        }
+        return runCatching {
+            val saved = projects.updateManuscript(projectId, current.text, current.title.trim()) ?: throw IllegalStateException("This project no longer exists.")
+            val brain = StoryBrain.analyze(current.text)
+            val bible = saved.storyBible.copy(
+                characters = brain.characters.map { name -> StoryBibleEntry("character-${name.lowercase().replace(" ", "-")}", name) },
+                locations = brain.places.map { place -> StoryBibleEntry("location-${place.lowercase().replace(" ", "-")}", place) },
+                themes = brain.themes
+            )
+            projects.updateStoryBible(projectId, bible) ?: throw IllegalStateException("Story Bible could not be saved.")
+        }.fold(
+            onSuccess = { latest -> _state.update { it.copy(project = latest, saving = false, saved = markSaved, error = null) }; true },
+            onFailure = { err -> _state.update { it.copy(saving = false, error = err.message ?: "Save failed.") }; false }
+        )
     }
 
     companion object {
         fun factory(projectId: String, projects: ProjectRepository) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                EditorViewModel(projectId, projects) as T
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = EditorViewModel(projectId, projects) as T
         }
     }
 }

@@ -29,8 +29,19 @@ class JsonProjectStoreTest {
         val draft = repo.createDraft(InputMode.TEXT)
         repo.updateIdea(draft.id, "an orchestra of rain")
         repo.updateFormat(draft.id, OutputFormat.NOVEL)
-        repo.updateGenerated(draft.id, "Chapter One\nRain.", "Rain Orchestra")
-        val saved = repo.save(store.getProject(draft.id)!!.copy(generatedText = "Chapter One\nRain, revised."))
+
+        val beforeGeneration = store.getProject(draft.id)!!
+        repo.updateGenerated(
+            draft.id,
+            expectedRevision = beforeGeneration.revision,
+            text = "Chapter One\nRain.",
+            title = "Rain Orchestra"
+        )
+        val saved = repo.updateManuscript(
+            draft.id,
+            "Chapter One\nRain, revised.",
+            "Rain Orchestra"
+        )!!
 
         val reopened = repo.get(saved.id)
         assertNotNull(reopened)

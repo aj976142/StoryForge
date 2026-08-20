@@ -30,88 +30,59 @@ data class GenerationUiState(
 class GenerationViewModel(
     private val projectId: String,
     private val continueWrite: Boolean,
+    private val instruction: String?,
     private val projects: ProjectRepository,
     private val settings: SettingsRepository,
     private val ai: AiService
 ) : ViewModel() {
-
     private val _state = MutableStateFlow(GenerationUiState())
     val state: StateFlow<GenerationUiState> = _state.asStateFlow()
     private var job: Job? = null
 
-    init {
-        start()
-    }
+    init { start() }
 
     fun start() {
         job?.cancel()
         _state.value = GenerationUiState(running = true)
         job = viewModelScope.launch {
             val project = projects.get(projectId)
-            if (project == null) {
-                _state.update {
-                    it.copy(running = false, error = "Project missing.", retryable = false)
-                }
-                return@launch
-            }
-            if (project.rawIdea.isBlank()) {
-                _state.update {
-                    it.copy(running = false, error = "This draft has no idea yet.", retryable = false)
-                }
-                return@launch
-            }
+            if (project == null) { _state.update { it.copy(running = false, error = "Project missing.", retryable = false) }; return@launch }
+            if (project.rawIdea.isBlank()) { _state.update { it.copy(running = false, error = "This draft has no idea yet.", retryable = false) }; return@launch }
+            val expectedRevision = project.revision
+            val canContinue = continueWrite && projects.generatedBelongsToContext(project)
             val prefs = runCatching { settings.writing.first() }.getOrDefault(WritingPreferences())
-            val flow = if (continueWrite && project.generatedText.isNotBlank()) {
-                ai.continueWriting(
-                    ContinueRequest(project.rawIdea, project.format, project.generatedText, prefs)
-                )
+            val flow = if (canContinue) {
+                ai.continueWriting(ContinueRequest(project.rawIdea, project.format, project.generatedText, prefs, instruction))
             } else {
-                ai.generate(GenerationRequest(project.rawIdea, project.format, prefs))
+                ai.generate(GenerationRequest(project.rawIdea, project.format, prefs, project.generatedText.takeIf { it.isNotBlank() }, instruction))
             }
             try {
                 flow.collect { event ->
                     when (event) {
-                        is GenerationEvent.Progress -> _state.update {
-                            it.copy(percent = event.percent, stage = event.stage, running = true)
-                        }
+                        is GenerationEvent.Progress -> _state.update { it.copy(percent = event.percent, stage = event.stage, running = true) }
                         is GenerationEvent.Chunk -> Unit
                         is GenerationEvent.Completed -> {
-                            projects.updateGenerated(projectId, event.fullText, event.suggestedTitle)
-                            _state.update {
-                                it.copy(percent = 100, stage = "Ready", running = false, doneId = projectId)
-                            }
+                            val saved = projects.updateGenerated(projectId, expectedRevision, event.fullText, event.suggestedTitle)
+                            if (saved == null) _state.update { it.copy(running = false, error = "This project changed while StoryForge was writing. Nothing was overwritten; generate again from the latest draft.", retryable = true) }
+                            else _state.update { it.copy(percent = 100, stage = "Ready", running = false, doneId = projectId) }
                         }
-                        is GenerationEvent.Failed -> _state.update {
-                            it.copy(running = false, error = event.message, retryable = event.retryable)
-                        }
+                        is GenerationEvent.Failed -> _state.update { it.copy(running = false, error = event.message, retryable = event.retryable) }
                     }
                 }
             } catch (_: kotlinx.coroutines.CancellationException) {
                 _state.update { it.copy(running = false, stage = "Stopped", error = "Generation stopped.") }
             } catch (error: Exception) {
-                _state.update {
-                    it.copy(running = false, error = error.message ?: "Something went wrong.", retryable = true)
-                }
+                _state.update { it.copy(running = false, error = error.message ?: "Something went wrong.", retryable = true) }
             }
         }
     }
 
-    fun stop() {
-        job?.cancel()
-        _state.update { it.copy(running = false, stage = "Stopped", error = "Generation stopped.") }
-    }
+    fun stop() { job?.cancel(); _state.update { it.copy(running = false, stage = "Stopped", error = "Generation stopped.") } }
 
     companion object {
-        fun factory(
-            projectId: String,
-            continueWrite: Boolean,
-            projects: ProjectRepository,
-            settings: SettingsRepository,
-            ai: AiService
-        ) = object : ViewModelProvider.Factory {
+        fun factory(projectId: String, continueWrite: Boolean, instruction: String?, projects: ProjectRepository, settings: SettingsRepository, ai: AiService) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                GenerationViewModel(projectId, continueWrite, projects, settings, ai) as T
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = GenerationViewModel(projectId, continueWrite, instruction, projects, settings, ai) as T
         }
     }
 }

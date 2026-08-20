@@ -1,0 +1,70 @@
+name: Android APK Build
+
+on:
+  push:
+    branches:
+      - "agent/**"
+      - "a/01a013ff-shorts-agent"
+  pull_request:
+    branches:
+      - "a/01a013ff-shorts-agent"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Test, lint and build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Run unit tests and lint
+        run: ./gradlew --no-daemon test lintDebug
+
+      - name: Build debug and release variants
+        run: ./gradlew --no-daemon assembleDebug assembleRelease
+
+      - name: Validate APK archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          for apk in app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/*.apk; do
+            echo "Checking $apk"
+            unzip -t "$apk" >/dev/null
+            test -s "$apk"
+          done
+
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: storyforge-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload unsigned release APK for build verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: storyforge-release-unsigned-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+# Triggered from the StoryForge v1 build stage.
