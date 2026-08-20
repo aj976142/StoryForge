@@ -1,6 +1,7 @@
 package com.storyforge.ai.data.ai
 
 import com.storyforge.ai.domain.model.OutputFormat
+import com.storyforge.ai.domain.model.StoryBible
 import com.storyforge.ai.domain.model.WritingPreferences
 import kotlinx.coroutines.flow.Flow
 
@@ -19,7 +20,9 @@ data class GenerationRequest(
     val preferences: WritingPreferences = WritingPreferences(),
     val existingText: String? = null,
     /** Optional focused instruction such as polish, expand, shorten or screenplay conversion. */
-    val instruction: String? = null
+    val instruction: String? = null,
+    /** Continuity memory owned by the current project only. */
+    val storyBible: StoryBible = StoryBible()
 )
 
 data class ContinueRequest(
@@ -27,7 +30,9 @@ data class ContinueRequest(
     val format: OutputFormat,
     val currentText: String,
     val preferences: WritingPreferences = WritingPreferences(),
-    val instruction: String? = null
+    val instruction: String? = null,
+    /** Continuity memory owned by the current project only. */
+    val storyBible: StoryBible = StoryBible()
 )
 
 sealed class GenerationEvent {
